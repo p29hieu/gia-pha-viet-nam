@@ -1,0 +1,113 @@
+rules_version = '2';
+
+// =============================================================================
+// Gia Pha Viet Nam - Security Rules
+//
+// Cau hinh Firebase phia client la cong khai, nen TOAN BO bao mat nam o day.
+// Nguyen tac: khong ai doc duoc gi neu chua la thanh vien cua dong ho do.
+//
+// Quy trinh tham gia: dang nhap Google -> tao yeu cau vao ho -> chu ho duyet
+// -> chu ho tao ban ghi thanh vien. Nguoi chua duoc duyet khong doc duoc gi.
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function membershipPath(clanId) {
+      return /databases/$(database)/documents/clans/$(clanId)/memberships/$(request.auth.uid);
+    }
+
+    function isMember(clanId) {
+      return signedIn() && exists(membershipPath(clanId));
+    }
+
+    function myRole(clanId) {
+      return get(membershipPath(clanId)).data.role;
+    }
+
+    function canEdit(clanId) {
+      return isMember(clanId) && myRole(clanId) in ['owner', 'editor'];
+    }
+
+    function isOwner(clanId) {
+      return isMember(clanId) && myRole(clanId) == 'owner';
+    }
+
+    // ---------------------------------------------------------------- dong ho
+
+    match /clans/{clanId} {
+      allow get: if isMember(clanId);
+      // Khong cho liet ke toan bo dong ho tren he thong.
+      allow list: if false;
+
+      // Ai dang nhap cung tao duoc dong ho cua minh, nhung phai tu nhan lam chu.
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isOwner(clanId) && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if false;
+
+      // ------------------------------------------------------------ thanh vien
+
+      match /memberships/{uid} {
+        allow read: if isMember(clanId);
+
+        // Nguoi vua tao dong ho tu ghi minh lam chu. Ngoai ra chi chu ho moi
+        // them duoc nguoi khac - day la chot chan duy nhat de vao duoc du lieu.
+        allow create: if signedIn() && (
+          (request.auth.uid == uid
+            && request.resource.data.role == 'owner'
+            && get(/databases/$(database)/documents/clans/$(clanId)).data.ownerUid == request.auth.uid)
+          || isOwner(clanId)
+        );
+        allow update, delete: if isOwner(clanId)
+          // Chu ho khong tu ha quyen minh, tranh khoa chet dong ho.
+          && !(uid == request.auth.uid && request.resource.data.role != 'owner');
+      }
+
+      // --------------------------------------------------------- xin vao dong ho
+
+      match /joinRequests/{uid} {
+        // Nguoi xin chi thay yeu cau cua chinh minh; chu ho thay tat ca.
+        allow read: if signedIn() && (request.auth.uid == uid || isOwner(clanId));
+        allow create: if signedIn() && request.auth.uid == uid;
+        allow delete: if signedIn() && (request.auth.uid == uid || isOwner(clanId));
+        allow update: if false;
+      }
+
+      // ----------------------------------------------------------- nguoi trong ho
+
+      match /members/{memberId} {
+        allow read: if isMember(clanId);
+        allow create, update, delete: if canEdit(clanId);
+      }
+
+      match /marriages/{marriageId} {
+        allow read: if isMember(clanId);
+        allow create, update, delete: if canEdit(clanId);
+      }
+
+      match /notes/{noteId} {
+        allow read: if isMember(clanId);
+        // Khong cho mao danh nguoi khac khi ghi chu.
+        allow create: if canEdit(clanId) && request.resource.data.authorUid == request.auth.uid;
+        allow update: if false;
+        allow delete: if isMember(clanId)
+          && (resource.data.authorUid == request.auth.uid || isOwner(clanId));
+      }
+    }
+
+    // ---------------------------------------------------------------- ho so rieng
+
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Moi thu khong khop luat nao o tren deu bi tu choi.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

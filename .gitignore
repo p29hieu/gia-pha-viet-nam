@@ -8,3 +8,6 @@ coverage
 !.env.example
 playwright-report
 test-results
+
+# Du lieu gia pha that — KHONG BAO GIO commit vao repo public
+backup/
