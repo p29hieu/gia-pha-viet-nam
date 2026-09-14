@@ -644,3 +644,17 @@ button.lineage__name:active { color: var(--son); }
   .detail__scroll { padding: var(--space-5); }
   .detail__actions { padding-bottom: var(--space-3); }
 }
+
+.picker__form { max-width: 32rem; margin: 0 auto; }
+.picker__form-actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); }
+.picker__form-actions .btn { flex: 1; }
+.picker__alt { max-width: 44rem; margin: var(--space-4) auto 0; font-size: var(--text-sm); color: var(--ink-soft); }
+.linkish {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--son);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

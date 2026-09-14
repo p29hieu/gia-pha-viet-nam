@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { IS_DEMO } from './api/client';
 import { LoginCard } from './components/auth/LoginCard';
-import { PositionPicker } from './components/auth/PositionPicker';
+import { PositionPicker, type SelfDraft } from './components/auth/PositionPicker';
 import {
   MemberForm,
   type FormMode,
@@ -119,6 +119,24 @@ export default function App() {
     [data, formMode, closeForm],
   );
 
+  // Gia phả mới tinh chưa có ai để chọn, nên phải cho tạo người đầu tiên
+  // rồi gán luôn làm vị trí của mình.
+  const handleCreateSelf = useCallback(
+    async (draft: SelfDraft) => {
+      setBusy(true);
+      setActionError('');
+      try {
+        const newId = await data.addMember(draft);
+        if (newId) await data.chooseMyPosition(newId);
+      } catch (err) {
+        setActionError((err as Error).message);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [data],
+  );
+
   const handleDelete = useCallback(async () => {
     if (!deleteId) return;
     setBusy(true);
@@ -157,7 +175,16 @@ export default function App() {
   }
 
   if (!data.myMemberId) {
-    return <PositionPicker members={data.members} onPick={(id) => void data.chooseMyPosition(id)} />;
+    return (
+      <PositionPicker
+        members={data.members}
+        canEdit={data.canEdit}
+        busy={busy}
+        error={actionError}
+        onPick={(id) => void data.chooseMyPosition(id)}
+        onCreateSelf={(draft) => void handleCreateSelf(draft)}
+      />
+    );
   }
 
   const me = data.graph.members.get(data.myMemberId);

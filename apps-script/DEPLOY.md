@@ -14,6 +14,23 @@
 Nội dung `Code.gs` trên Google chính là bản sao của `apps-script/Code.gs` trong repo này.
 Khi sửa code, sửa ở repo trước rồi dán lại lên Apps Script để hai bên không lệch nhau.
 
+## Đã triển khai
+
+| Thứ | Giá trị |
+|---|---|
+| Web App URL | `https://script.google.com/macros/s/AKfycbw9ebLY060x0Wn0hB36TdJGzFzgpVcDDeQFKv1DkI6ZgqdeqeyQwU0kNN0NfP0W-WBh/exec` |
+| Execute as | Me |
+| Who has access | Anyone |
+| Version | 1 |
+
+URL này đã nằm trong `.env.local` (không commit) và trong repository secret `VITE_API_URL`.
+
+> **Lưu ý**: repo là public nên URL này xuất hiện trong gói JS đã build. Thứ thực sự bảo vệ
+> dữ liệu là **mã đăng nhập**, không phải sự bí mật của URL. Đừng chia sẻ mã ra ngoài họ.
+
+Khi sửa `Code.gs`, phải **Deploy > Manage deployments > sửa > New version** thì bản mới mới
+có hiệu lực; chỉ bấm Save trong trình soạn thảo là chưa đủ.
+
 ## Các bước còn lại
 
 1. **Chạy `setupSpreadsheet()`** trong Apps Script editor.

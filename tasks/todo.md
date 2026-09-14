@@ -14,12 +14,16 @@
 - [x] **Sửa / xoá thành viên**, xoá ghi chú, có chặn an toàn và xác nhận trước khi xoá
 - [x] **Viết lại giao diện theo hướng mobile-first** cho Safari trên iPhone
 
+- [x] Cấp quyền OAuth, chạy `setupSpreadsheet()` — đã tạo đủ 6 sheet và mã quản trị
+- [x] Deploy Web App, gắn URL vào `.env.local` và repository secret `VITE_API_URL`
+- [x] Bật GitHub Pages
+- [x] Test luồng thật với Google Sheet: đăng nhập, tạo người đầu tiên, xoá
+
 ## Còn lại
 
-- [ ] Cấp quyền OAuth cho Apps Script rồi chạy `setupSpreadsheet()` *(cần anh Hiếu bấm Allow)*
-- [ ] Deploy Web App, lấy URL `/exec`, đặt vào `.env.local` và repository secret `VITE_API_URL`
-- [ ] Bật GitHub Pages cho repo
+- [ ] Đổi tên dòng họ trong sheet `Config` (đang là `Gia pha dong ho`, chưa có dấu)
 - [ ] Nhập dữ liệu gia phả thật
+- [ ] Cấp mã cho người trong họ: chạy `generateAccessCode('Tên', 'editor')` trong Apps Script
 - [ ] Anh Hiếu soát lại bảng danh xưng theo thói quen của dòng họ
 
 ## Tương lai (đã bàn, chưa làm)
@@ -34,6 +38,14 @@
 không phân biệt được với mẹ ruột. Nguyên nhân: nhánh suy ra danh xưng từ vợ/chồng của
 người có huyết thống ánh xạ thẳng `bố → mẹ`. Đã tách riêng trường hợp bố mẹ kế
 (`mẹ kế` / `bố dượng`) và con riêng (`con riêng của chồng/vợ`), kèm 4 test mới.
+
+**Ngõ cụt bắt được khi test với Sheet thật**: gia phả mới tinh có 0 người, nên màn "Bạn là
+ai trong dòng họ?" trống trơn và không có cách nào thêm người đầu tiên. Đã thêm biểu mẫu
+tạo chính mình ngay tại màn đó khi gia phả còn trống.
+
+**Lỗi treo khi chạy `setupSpreadsheet()`**: hàm kết thúc bằng `SpreadsheetApp.getUi().alert()`,
+mà hộp thoại đó cần giao diện bảng tính để hiện; chạy từ trình soạn thảo Apps Script thì nó
+chờ vô hạn. Đã đổi sang `Logger.log` — đọc được ở cả hai nơi.
 
 **Quyết định kiến trúc**: tải toàn bộ gia phả về client một lần thay vì gọi API theo từng
 thao tác, vì Apps Script mất 1–3 giây mỗi lần gọi. Gia phả vài nghìn người vẫn rất nhẹ.

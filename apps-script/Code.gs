@@ -502,12 +502,17 @@ function setupSpreadsheet() {
   }
 
   getSecret_();
-  SpreadsheetApp.getUi().alert(
-    'Da khoi tao xong!\n\n' +
-    (code ? 'Ma quan tri cua ban: ' + code + '\n\n' : '') +
-    'Buoc tiep theo: Deploy > New deployment > Web app\n' +
-    'Execute as: Me\nWho has access: Anyone',
-  );
+
+  // KHONG dung SpreadsheetApp.getUi().alert() o day: hop thoai do can giao dien
+  // bang tinh de hien, chay tu trinh soan thao Apps Script thi no treo vo han.
+  // Ghi ra Execution log thi doc duoc o ca hai noi.
+  var summary =
+    'Da khoi tao xong!\n' +
+    (code ? 'Ma quan tri: ' + code + '\n' : '') +
+    'Buoc tiep theo: Deploy > New deployment > Web app ' +
+    '(Execute as: Me, Who has access: Anyone)';
+  Logger.log(summary);
+  return summary;
 }
 
 /** Tao them mot ma dang nhap moi cho nguoi trong ho. */
