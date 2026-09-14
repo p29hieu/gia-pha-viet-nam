@@ -12,10 +12,12 @@ import { PersonDetail } from './components/person/PersonDetail';
 import { SearchBar } from './components/search/SearchBar';
 import { FamilyTree } from './components/tree/FamilyTree';
 import { ConfirmDialog } from './components/ui/ConfirmDialog';
+import { ToastStack } from './components/ui/Toast';
 import { checkCanDelete } from './domain/edit';
 import { getSpouses } from './domain/graph';
 import type { Member } from './domain/types';
 import { useFamilyData } from './hooks/useFamilyData';
+import { useToasts } from './hooks/useToasts';
 import './styles/app.css';
 
 const TOKEN_KEY = 'giapha_token';
@@ -31,6 +33,7 @@ function readToken(): string | null {
 export default function App() {
   const [token, setToken] = useState<string | null>(readToken);
   const data = useFamilyData(token);
+  const { toasts, push: toast, dismiss: dismissToast } = useToasts();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -88,14 +91,17 @@ export default function App() {
             );
           }
         }
+        toast('success', `Đã thêm ${draft.fullName} vào gia phả`);
         closeForm();
       } catch (err) {
-        setActionError((err as Error).message);
+        const message = (err as Error).message;
+        setActionError(message);
+        toast('error', message);
       } finally {
         setBusy(false);
       }
     },
-    [data, formMode, closeForm],
+    [data, formMode, closeForm, toast],
   );
 
   const handleSave = useCallback(
@@ -105,18 +111,22 @@ export default function App() {
         closeForm();
         return;
       }
+      const name = formMode.member.fullName;
       setBusy(true);
       setActionError('');
       try {
         await data.updateMember(formMode.member.id, patch);
+        toast('success', `Đã lưu thay đổi cho ${name}`);
         closeForm();
       } catch (err) {
-        setActionError((err as Error).message);
+        const message = (err as Error).message;
+        setActionError(message);
+        toast('error', message);
       } finally {
         setBusy(false);
       }
     },
-    [data, formMode, closeForm],
+    [data, formMode, closeForm, toast],
   );
 
   // Gia phả mới tinh chưa có ai để chọn, nên phải cho tạo người đầu tiên
@@ -128,29 +138,60 @@ export default function App() {
       try {
         const newId = await data.addMember(draft);
         if (newId) await data.chooseMyPosition(newId);
+        toast('success', `Đã bắt đầu gia phả từ ${draft.fullName}`);
       } catch (err) {
-        setActionError((err as Error).message);
+        const message = (err as Error).message;
+        setActionError(message);
+        toast('error', message);
       } finally {
         setBusy(false);
       }
     },
-    [data],
+    [data, toast],
   );
 
   const handleDelete = useCallback(async () => {
     if (!deleteId) return;
+    const name = data.graph.members.get(deleteId)?.fullName ?? 'người này';
     setBusy(true);
     setActionError('');
     try {
       await data.deleteMember(deleteId);
       if (selectedId === deleteId) setSelectedId(null);
       setDeleteId(null);
+      toast('success', `Đã xoá ${name} khỏi gia phả`);
     } catch (err) {
-      setActionError((err as Error).message);
+      const message = (err as Error).message;
+      setActionError(message);
+      toast('error', message);
     } finally {
       setBusy(false);
     }
-  }, [data, deleteId, selectedId]);
+  }, [data, deleteId, selectedId, toast]);
+
+  const handleAddNote = useCallback(
+    async (memberId: string, content: string) => {
+      try {
+        await data.addNote(memberId, content);
+        toast('success', 'Đã lưu ghi chú');
+      } catch (err) {
+        toast('error', (err as Error).message);
+      }
+    },
+    [data, toast],
+  );
+
+  const handleDeleteNote = useCallback(
+    async (id: string) => {
+      try {
+        await data.deleteNote(id);
+        toast('success', 'Đã xoá ghi chú');
+      } catch (err) {
+        toast('error', (err as Error).message);
+      }
+    },
+    [data, toast],
+  );
 
   if (!token) return <LoginCard onSuccess={handleLogin} />;
 
@@ -222,6 +263,7 @@ export default function App() {
           </button>
         </div>
         <SearchBar graph={data.graph} myMemberId={data.myMemberId} onSelect={setSelectedId} />
+        {data.refreshing && <span className="refreshbar" aria-hidden="true" />}
       </header>
 
       {IS_DEMO && (
@@ -248,8 +290,8 @@ export default function App() {
           canEdit={data.canEdit}
           isAdmin={data.role === 'admin'}
           onSelect={setSelectedId}
-          onAddNote={data.addNote}
-          onDeleteNote={data.deleteNote}
+          onAddNote={handleAddNote}
+          onDeleteNote={handleDeleteNote}
           onAddRelative={(id) => {
             const anchor = data.graph.members.get(id);
             if (anchor) setFormMode({ kind: 'create', anchor });
@@ -273,6 +315,8 @@ export default function App() {
           onSave={(patch) => void handleSave(patch)}
         />
       )}
+
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
 
       {pendingDelete && deleteCheck && (
         <ConfirmDialog

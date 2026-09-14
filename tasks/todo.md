@@ -13,6 +13,7 @@
 
 - [x] **Sửa / xoá thành viên**, xoá ghi chú, có chặn an toàn và xác nhận trước khi xoá
 - [x] **Viết lại giao diện theo hướng mobile-first** cho Safari trên iPhone
+- [x] **Toast thay cho màn hình chờ toàn trang** sau mỗi thao tác ghi
 
 - [x] Cấp quyền OAuth, chạy `setupSpreadsheet()` — đã tạo đủ 6 sheet và mã quản trị
 - [x] Deploy Web App, gắn URL vào `.env.local` và repository secret `VITE_API_URL`
@@ -38,6 +39,14 @@
 không phân biệt được với mẹ ruột. Nguyên nhân: nhánh suy ra danh xưng từ vợ/chồng của
 người có huyết thống ánh xạ thẳng `bố → mẹ`. Đã tách riêng trường hợp bố mẹ kế
 (`mẹ kế` / `bố dượng`) và con riêng (`con riêng của chồng/vợ`), kèm 4 test mới.
+
+**Lỗi anh Hiếu báo khi dùng thật**: mỗi lần lưu thành viên, cả màn hình bị thay bằng
+"Đang mở gia phả…". Nguyên nhân: sau khi ghi, hook tải lại dữ liệu và đặt `status` về
+`loading`, mà App coi `loading` là "đang mở lần đầu" nên xoá sạch màn hình — với Apps Script
+mất 2-4 giây mỗi lần ghi thì cái chớp đó rất khó chịu. Đã tách `refreshing` (tải lại ngầm)
+ra khỏi `loading` (mở lần đầu): dữ liệu cũ giữ nguyên trên màn hình, chỉ có một vạch mảnh
+chạy dưới thanh trên, và kết quả báo bằng toast ở góc. Kiểm chứng bằng MutationObserver:
+chạy đủ thêm/sửa/xoá mà màn hình chờ không xuất hiện lần nào.
 
 **Ngõ cụt bắt được khi test với Sheet thật**: gia phả mới tinh có 0 người, nên màn "Bạn là
 ai trong dòng họ?" trống trơn và không có cách nào thêm người đầu tiên. Đã thêm biểu mẫu
