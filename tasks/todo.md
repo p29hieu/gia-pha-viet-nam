@@ -22,6 +22,17 @@
 - [x] Bật GitHub Pages
 - [x] Test luồng thật với Google Sheet: đăng nhập, tạo người đầu tiên, xoá
 
+## Chuyển sang Firebase
+
+- [x] Tạo project, bật đăng nhập Google, dựng Firestore tại Singapore
+- [x] Security rules: chưa được duyệt thì không đọc được gì
+- [x] Tầng dữ liệu Firestore + cổng chung để đổi nền tảng chỉ sửa một file
+- [x] Màn đăng nhập Google, lập dòng họ, xin vào họ, chủ họ duyệt
+- [ ] Anh Hiếu đăng nhập lần đầu để lập dòng họ
+- [ ] Chuyển 17 người từ Google Sheet sang Firestore
+- [ ] Đặt biến môi trường Firebase cho GitHub Actions rồi deploy
+- [ ] Chạy song song một thời gian rồi mới gỡ Apps Script
+
 ## Còn lại
 
 - [ ] Đổi tên dòng họ trong sheet `Config` (đang là `Gia pha dong ho`, chưa có dấu)

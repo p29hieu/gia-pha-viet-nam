@@ -746,3 +746,22 @@ button.lineage__name:active { color: var(--son); }
 @media (min-width: 768px) {
   .toasts { left: auto; align-items: flex-end; padding-right: var(--space-4); max-width: 28rem; }
 }
+
+/* ---------------------------------------------------------------- đăng nhập Google */
+
+.btn--google { gap: var(--space-3); font-weight: 600; }
+.btn--google svg { flex-shrink: 0; }
+
+/* ---------------------------------------------------------------- duyệt thành viên */
+
+.requests { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.requests__item {
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.requests__who { display: flex; flex-direction: column; margin-bottom: var(--space-3); min-width: 0; }
+.requests__name { font-weight: 600; }
+.requests__meta { font-size: var(--text-xs); color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; }
+.requests__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }

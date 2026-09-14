@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { IS_DEMO } from './api/client';
-import { LoginCard } from './components/auth/LoginCard';
+import { ClanSetup } from './components/auth/ClanSetup';
+import { JoinGate } from './components/auth/JoinGate';
+import { JoinRequestsPanel } from './components/auth/JoinRequestsPanel';
 import { PositionPicker, type SelfDraft } from './components/auth/PositionPicker';
+import { SignInCard } from './components/auth/SignInCard';
 import {
   MemberForm,
   type FormMode,
@@ -17,32 +20,27 @@ import { checkCanDelete } from './domain/edit';
 import { getSpouses } from './domain/graph';
 import type { Member } from './domain/types';
 import { useFamilyData } from './hooks/useFamilyData';
+import { useSession } from './hooks/useSession';
 import { useToasts } from './hooks/useToasts';
 import './styles/app.css';
 
-const TOKEN_KEY = 'giapha_token';
-
-function readToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
 export default function App() {
-  const [token, setToken] = useState<string | null>(readToken);
-  const data = useFamilyData(token);
+  const session = useSession();
+  const isMember = session.state.status === 'member';
+  const data = useFamilyData(isMember);
   const { toasts, push: toast, dismiss: dismissToast } = useToasts();
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [showRequests, setShowRequests] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
 
   const { refresh } = data;
+  const myMemberId = session.state.status === 'member' ? session.state.membership.memberId : '';
 
-  // Hai, ba người cùng sửa một gia phả thì dữ liệu trên máy dễ cũ.
+  // Hai, ba người cùng vun một gia phả thì dữ liệu trên máy dễ cũ.
   // Quay lại app là lấy bản mới, nhưng chỉ khi lần tải trước đã đủ lâu.
   useEffect(() => {
     const sync = () => {
@@ -56,34 +54,11 @@ export default function App() {
     };
   }, [refresh]);
 
-  const handleLogin = useCallback((t: string) => {
-    try {
-      localStorage.setItem(TOKEN_KEY, t);
-    } catch {
-      // vẫn dùng được trong phiên hiện tại
-    }
-    setToken(t);
-  }, []);
-
-  const handleLogout = useCallback(() => {
-    try {
-      localStorage.removeItem(TOKEN_KEY);
-    } catch {
-      // bỏ qua
-    }
-    setToken(null);
-    setSelectedId(null);
-  }, []);
-
   const closeForm = useCallback(() => {
     setFormMode(null);
     setActionError('');
   }, []);
 
-  /**
-   * Giao diện đã đổi ngay khi bấm Lưu, nên đóng biểu mẫu luôn và để việc gửi lên
-   * Google chạy ngầm. Hỏng thì hook tự hoàn nguyên, ta chỉ cần báo bằng toast.
-   */
   const handleCreate = useCallback(
     (relation: Relation, draft: MemberDraft) => {
       if (formMode?.kind !== 'create') return;
@@ -150,7 +125,7 @@ export default function App() {
       setActionError('');
       try {
         const newId = await data.addMember(draft);
-        if (newId) await data.chooseMyPosition(newId);
+        if (newId) await session.setMyPosition(newId);
         toast('success', `Đã bắt đầu gia phả từ ${draft.fullName}`);
       } catch (err) {
         const message = (err as Error).message;
@@ -160,24 +135,26 @@ export default function App() {
         setBusy(false);
       }
     },
-    [data, toast],
+    [data, session, toast],
   );
 
   const handleDelete = useCallback(() => {
     if (!deleteId) return;
     const name = data.graph.members.get(deleteId)?.fullName ?? 'người này';
+    const wasMe = deleteId === myMemberId;
     if (selectedId === deleteId) setSelectedId(null);
     setDeleteId(null);
 
     void (async () => {
       try {
         await data.deleteMember(deleteId);
+        if (wasMe) await session.setMyPosition('');
         toast('success', `Đã xoá ${name} khỏi gia phả`);
       } catch (err) {
         toast('error', `Không xoá được ${name}. ${(err as Error).message}`);
       }
     })();
-  }, [data, deleteId, selectedId, toast]);
+  }, [data, deleteId, selectedId, myMemberId, session, toast]);
 
   const handleAddNote = useCallback(
     async (memberId: string, content: string) => {
@@ -214,7 +191,56 @@ export default function App() {
     })();
   }, [refresh, toast]);
 
-  if (!token) return <LoginCard onSuccess={handleLogin} />;
+  // ------------------------------------------------------------- định tuyến phiên
+
+  const s = session.state;
+
+  if (s.status === 'loading') {
+    return (
+      <main className="splash">
+        <p className="splash__text">Đang mở gia phả…</p>
+      </main>
+    );
+  }
+
+  if (s.status === 'error') {
+    return (
+      <main className="splash">
+        <h1 className="splash__title">Không mở được gia phả</h1>
+        <p className="splash__text">{s.message}</p>
+        <button className="btn btn--primary" type="button" onClick={() => void session.signOut()}>
+          Đăng nhập lại
+        </button>
+      </main>
+    );
+  }
+
+  if (s.status === 'signed-out') return <SignInCard onSignIn={session.signIn} />;
+
+  if (s.status === 'no-clan') {
+    return (
+      <ClanSetup
+        account={s.account}
+        onCreate={session.createClan}
+        onSignOut={() => void session.signOut()}
+      />
+    );
+  }
+
+  if (s.status === 'outsider' || s.status === 'pending') {
+    return (
+      <JoinGate
+        account={s.account}
+        clanName={s.clanName}
+        pending={s.status === 'pending'}
+        onRequest={session.requestJoin}
+        onRecheck={session.recheck}
+        onSignOut={() => void session.signOut()}
+      />
+    );
+  }
+
+  // ------------------------------------------------------------- đã vào dòng họ
 
   if (data.status === 'loading' || data.status === 'idle') {
     return (
@@ -227,29 +253,29 @@ export default function App() {
   if (data.status === 'error') {
     return (
       <main className="splash">
-        <h1 className="splash__title">Không mở được gia phả</h1>
+        <h1 className="splash__title">Không tải được gia phả</h1>
         <p className="splash__text">{data.error}</p>
-        <button className="btn btn--primary" type="button" onClick={handleLogout}>
-          Đăng nhập lại
+        <button className="btn btn--primary" type="button" onClick={handleRefresh}>
+          Thử lại
         </button>
       </main>
     );
   }
 
-  if (!data.myMemberId) {
+  if (!myMemberId) {
     return (
       <PositionPicker
         members={data.members}
-        canEdit={data.canEdit}
+        canEdit={session.canEdit}
         busy={busy}
         error={actionError}
-        onPick={(id) => void data.chooseMyPosition(id)}
+        onPick={(id) => void session.setMyPosition(id)}
         onCreateSelf={(draft) => void handleCreateSelf(draft)}
       />
     );
   }
 
-  const me = data.graph.members.get(data.myMemberId);
+  const me = data.graph.members.get(myMemberId);
   const selected = selectedId ? data.graph.members.get(selectedId) : null;
   const pendingDelete = deleteId ? data.graph.members.get(deleteId) : null;
   const deleteCheck = pendingDelete
@@ -268,12 +294,12 @@ export default function App() {
             族
           </span>
           <div className="topbar__text">
-            <h1 className="topbar__title">{data.clanName}</h1>
+            <h1 className="topbar__title">{s.clanName}</h1>
             <p className="topbar__sub">
               {data.members.length} người · bạn là <strong>{me?.fullName ?? '—'}</strong>
             </p>
           </div>
-          {data.canEdit && me && (
+          {session.canEdit && me && (
             <button
               className="btn btn--icon-lg"
               type="button"
@@ -281,6 +307,16 @@ export default function App() {
               aria-label="Thêm người"
             >
               +
+            </button>
+          )}
+          {session.isOwner && !IS_DEMO && (
+            <button
+              className="btn btn--icon-lg"
+              type="button"
+              onClick={() => setShowRequests(true)}
+              aria-label="Yêu cầu vào dòng họ"
+            >
+              👤
             </button>
           )}
           <button
@@ -295,13 +331,13 @@ export default function App() {
           <button
             className="btn btn--icon-lg"
             type="button"
-            onClick={handleLogout}
+            onClick={() => void session.signOut()}
             aria-label="Thoát"
           >
             ⎋
           </button>
         </div>
-        <SearchBar graph={data.graph} myMemberId={data.myMemberId} onSelect={setSelectedId} />
+        <SearchBar graph={data.graph} myMemberId={myMemberId} onSelect={setSelectedId} />
         {data.busy && <span className="refreshbar" aria-hidden="true" />}
       </header>
 
@@ -314,7 +350,7 @@ export default function App() {
       <main className="workspace">
         <FamilyTree
           graph={data.graph}
-          myMemberId={data.myMemberId}
+          myMemberId={myMemberId}
           selectedId={selectedId}
           onSelect={setSelectedId}
         />
@@ -324,10 +360,10 @@ export default function App() {
         <PersonDetail
           member={selected}
           graph={data.graph}
-          myMemberId={data.myMemberId}
+          myMemberId={myMemberId}
           notes={data.notesByMember.get(selected.id) ?? []}
-          canEdit={data.canEdit}
-          isAdmin={data.role === 'admin'}
+          canEdit={session.canEdit}
+          isAdmin={session.isOwner}
           onSelect={setSelectedId}
           onAddNote={handleAddNote}
           onDeleteNote={handleDeleteNote}
@@ -353,6 +389,10 @@ export default function App() {
           onCreate={handleCreate}
           onSave={handleSave}
         />
+      )}
+
+      {showRequests && (
+        <JoinRequestsPanel onClose={() => setShowRequests(false)} onChanged={() => undefined} />
       )}
 
       <ToastStack toasts={toasts} onDismiss={dismissToast} />

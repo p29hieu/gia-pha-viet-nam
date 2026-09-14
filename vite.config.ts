@@ -7,6 +7,18 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ command }) => ({
   plugins: [react()],
   base: command === 'build' ? '/gia-pha-viet-nam/' : '/',
+  build: {
+    rollupOptions: {
+      output: {
+        // Tach Firebase ra chunk rieng: no nang va gan nhu khong doi, nen de
+        // trinh duyet giu cache trong khi ma ung dung van cap nhat binh thuong.
+        manualChunks: {
+          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 800,
+  },
   test: {
     environment: 'jsdom',
     globals: true,

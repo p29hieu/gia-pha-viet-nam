@@ -3,16 +3,17 @@ import * as api from '../api/client';
 import { buildGraph } from '../domain/graph';
 import * as opt from '../domain/optimistic';
 import type { FamilySnapshot } from '../domain/optimistic';
-import type { Marriage, Member, Note } from '../domain/types';
+import type { Member, Note } from '../domain/types';
 
-interface State extends FamilySnapshot {
+interface State {
   status: 'idle' | 'loading' | 'ready' | 'error';
   /** Đang tải lại ngầm — KHÁC với 'loading' là lần mở đầu tiên. */
   refreshing: boolean;
   /** Số thao tác ghi đang bay tới máy chủ. */
   saving: number;
-  clanName: string;
-  role: api.Role;
+  members: Member[];
+  marriages: api.ClanData['marriages'];
+  notes: Note[];
   error: string;
 }
 
@@ -23,16 +24,13 @@ const EMPTY: State = {
   members: [],
   marriages: [],
   notes: [],
-  myMemberId: '',
-  clanName: '',
-  role: 'viewer',
   error: '',
 };
 
 /** Tải lại nếu lần tải gần nhất đã quá cũ — dùng khi quay lại app. */
 const STALE_AFTER_MS = 30_000;
 
-export function useFamilyData(token: string | null) {
+export function useFamilyData(ready: boolean) {
   const [state, setState] = useState<State>(EMPTY);
   const lastLoadedAt = useRef(0);
 
@@ -42,24 +40,24 @@ export function useFamilyData(token: string | null) {
 
   const snapshot = useCallback((): FamilySnapshot => {
     const s = stateRef.current;
-    return {
-      members: s.members,
-      marriages: s.marriages,
-      notes: s.notes,
-      myMemberId: s.myMemberId,
-    };
+    return { members: s.members, marriages: s.marriages, notes: s.notes, myMemberId: '' };
   }, []);
 
   const apply = useCallback((next: FamilySnapshot) => {
-    setState((s) => ({ ...s, ...next }));
+    setState((s) => ({
+      ...s,
+      members: next.members,
+      marriages: next.marriages,
+      notes: next.notes,
+    }));
   }, []);
 
-  const load = useCallback(async (t: string, silent = false) => {
+  const load = useCallback(async (silent = false) => {
     setState((s) =>
       silent ? { ...s, refreshing: true, error: '' } : { ...s, status: 'loading', error: '' },
     );
     try {
-      const data = await api.bootstrap(t);
+      const data = await api.loadClanData();
       lastLoadedAt.current = Date.now();
       setState((s) => ({
         ...s,
@@ -68,9 +66,6 @@ export function useFamilyData(token: string | null) {
         members: data.members,
         marriages: data.marriages,
         notes: data.notes,
-        clanName: data.clanName,
-        myMemberId: data.me.memberId,
-        role: data.me.role,
         error: '',
       }));
     } catch (err) {
@@ -83,12 +78,12 @@ export function useFamilyData(token: string | null) {
   }, []);
 
   useEffect(() => {
-    if (token) void load(token);
+    if (ready) void load();
     else setState(EMPTY);
-  }, [token, load]);
+  }, [ready, load]);
 
   /**
-   * Gửi một thao tác ghi lên máy chủ trong lúc giao diện đã đổi sẵn.
+   * Gửi một thao tác ghi trong lúc giao diện đã đổi sẵn.
    * Hỏng thì trả màn hình về đúng ảnh chụp trước đó rồi ném lỗi ra ngoài.
    */
   const send = useCallback(
@@ -108,53 +103,39 @@ export function useFamilyData(token: string | null) {
 
   const addMember = useCallback(
     async (input: api.NewMemberInput) => {
-      if (!token) return '';
       const before = snapshot();
       const draft: Member = { ...input, id: opt.tempId() };
       apply(opt.addMember(before, draft, input.spouseId));
 
       return send(before, async () => {
-        const realId = await api.addMember(token, input);
+        const realId = await api.addMember(input);
         apply(opt.commitId(snapshot(), draft.id, realId));
         return realId;
       });
     },
-    [token, snapshot, apply, send],
+    [snapshot, apply, send],
   );
 
   const updateMember = useCallback(
     async (id: string, patch: Partial<Member>) => {
-      if (!token) return;
       const before = snapshot();
       apply(opt.updateMember(before, id, patch));
-      await send(before, () => api.updateMember(token, id, patch));
+      await send(before, () => api.updateMember(id, patch));
     },
-    [token, snapshot, apply, send],
+    [snapshot, apply, send],
   );
 
   const deleteMember = useCallback(
     async (id: string) => {
-      if (!token) return;
       const before = snapshot();
       apply(opt.removeMember(before, id));
-      await send(before, () => api.deleteMember(token, id));
+      await send(before, () => api.deleteMember(id));
     },
-    [token, snapshot, apply, send],
-  );
-
-  const chooseMyPosition = useCallback(
-    async (memberId: string) => {
-      if (!token) return;
-      const before = snapshot();
-      apply({ ...before, myMemberId: memberId });
-      await send(before, () => api.setMyPosition(token, memberId));
-    },
-    [token, snapshot, apply, send],
+    [snapshot, apply, send],
   );
 
   const addNote = useCallback(
     async (memberId: string, content: string) => {
-      if (!token) return;
       const before = snapshot();
       const draft: Note = {
         id: opt.tempId('tmpn'),
@@ -167,31 +148,30 @@ export function useFamilyData(token: string | null) {
       apply(opt.addNote(before, draft));
 
       await send(before, async () => {
-        const saved = await api.addNote(token, memberId, content);
+        const saved = await api.addNote(memberId, content);
         apply(opt.commitId(snapshot(), draft.id, saved.id));
       });
     },
-    [token, snapshot, apply, send],
+    [snapshot, apply, send],
   );
 
   const deleteNote = useCallback(
     async (id: string) => {
-      if (!token) return;
       const before = snapshot();
       apply(opt.removeNote(before, id));
-      await send(before, () => api.deleteNote(token, id));
+      await send(before, () => api.deleteNote(id));
     },
-    [token, snapshot, apply, send],
+    [snapshot, apply, send],
   );
 
   const refresh = useCallback(
     async (onlyIfStale = false) => {
-      if (!token) return;
+      if (!ready) return;
       if (onlyIfStale && Date.now() - lastLoadedAt.current < STALE_AFTER_MS) return;
       if (stateRef.current.saving > 0) return;
-      await load(token, true);
+      await load(true);
     },
-    [token, load],
+    [ready, load],
   );
 
   const graph = useMemo(
@@ -209,16 +189,11 @@ export function useFamilyData(token: string | null) {
     return map;
   }, [state.notes]);
 
-  const canEdit = state.role === 'admin' || state.role === 'editor';
-  const busy = state.refreshing || state.saving > 0;
-
   return {
     ...state,
-    busy,
+    busy: state.refreshing || state.saving > 0,
     graph,
     notesByMember,
-    canEdit,
-    chooseMyPosition,
     addMember,
     updateMember,
     deleteMember,
@@ -227,5 +202,3 @@ export function useFamilyData(token: string | null) {
     refresh,
   };
 }
-
-export type { Marriage, Member, Note };

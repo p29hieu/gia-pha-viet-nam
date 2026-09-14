@@ -40,7 +40,11 @@ service cloud.firestore {
     // ---------------------------------------------------------------- dong ho
 
     match /clans/{clanId} {
-      allow get: if isMember(clanId);
+      // Ai dang nhap cung doc duoc document nay, vi no chi chua ten dong ho va
+      // uid cua chu ho - khong co du lieu gia pha. Can the de app phan biet
+      // "dong ho chua ton tai" voi "ton tai nhung minh chua duoc duyet".
+      // Du lieu that nam o cac collection con, van khoa chat theo membership.
+      allow get: if signedIn();
       // Khong cho liet ke toan bo dong ho tren he thong.
       allow list: if false;
 
