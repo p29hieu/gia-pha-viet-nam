@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { IS_DEMO } from './api/client';
 import { LoginCard } from './components/auth/LoginCard';
 import { PositionPicker, type SelfDraft } from './components/auth/PositionPicker';
@@ -40,6 +40,22 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
 
+  const { refresh } = data;
+
+  // Hai, ba người cùng sửa một gia phả thì dữ liệu trên máy dễ cũ.
+  // Quay lại app là lấy bản mới, nhưng chỉ khi lần tải trước đã đủ lâu.
+  useEffect(() => {
+    const sync = () => {
+      if (document.visibilityState === 'visible') void refresh(true).catch(() => undefined);
+    };
+    document.addEventListener('visibilitychange', sync);
+    window.addEventListener('focus', sync);
+    return () => {
+      document.removeEventListener('visibilitychange', sync);
+      window.removeEventListener('focus', sync);
+    };
+  }, [refresh]);
+
   const handleLogin = useCallback((t: string) => {
     try {
       localStorage.setItem(TOKEN_KEY, t);
@@ -64,73 +80,70 @@ export default function App() {
     setActionError('');
   }, []);
 
+  /**
+   * Giao diện đã đổi ngay khi bấm Lưu, nên đóng biểu mẫu luôn và để việc gửi lên
+   * Google chạy ngầm. Hỏng thì hook tự hoàn nguyên, ta chỉ cần báo bằng toast.
+   */
   const handleCreate = useCallback(
-    async (relation: Relation, draft: MemberDraft) => {
+    (relation: Relation, draft: MemberDraft) => {
       if (formMode?.kind !== 'create') return;
       const anchor = formMode.anchor;
-      setBusy(true);
-      setActionError('');
-      try {
-        if (relation === 'con') {
-          const spouse = getSpouses(data.graph, anchor.id)[0];
-          await data.addMember({
-            ...draft,
-            fatherId: anchor.gender === 'M' ? anchor.id : spouse,
-            motherId: anchor.gender === 'F' ? anchor.id : spouse,
-          });
-        } else if (relation === 'vo-chong') {
-          await data.addMember({ ...draft, spouseId: anchor.id });
-        } else if (relation === 'anh-chi-em') {
-          await data.addMember({ ...draft, fatherId: anchor.fatherId, motherId: anchor.motherId });
-        } else {
-          const newId = await data.addMember(draft);
-          if (newId) {
-            await data.updateMember(
-              anchor.id,
-              relation === 'bo' ? { fatherId: newId } : { motherId: newId },
-            );
+      closeForm();
+
+      void (async () => {
+        try {
+          if (relation === 'con') {
+            const spouse = getSpouses(data.graph, anchor.id)[0];
+            await data.addMember({
+              ...draft,
+              fatherId: anchor.gender === 'M' ? anchor.id : spouse,
+              motherId: anchor.gender === 'F' ? anchor.id : spouse,
+            });
+          } else if (relation === 'vo-chong') {
+            await data.addMember({ ...draft, spouseId: anchor.id });
+          } else if (relation === 'anh-chi-em') {
+            await data.addMember({
+              ...draft,
+              fatherId: anchor.fatherId,
+              motherId: anchor.motherId,
+            });
+          } else {
+            const newId = await data.addMember(draft);
+            if (newId) {
+              await data.updateMember(
+                anchor.id,
+                relation === 'bo' ? { fatherId: newId } : { motherId: newId },
+              );
+            }
           }
+          toast('success', `Đã thêm ${draft.fullName} vào gia phả`);
+        } catch (err) {
+          toast('error', `Không lưu được ${draft.fullName}. ${(err as Error).message}`);
         }
-        toast('success', `Đã thêm ${draft.fullName} vào gia phả`);
-        closeForm();
-      } catch (err) {
-        const message = (err as Error).message;
-        setActionError(message);
-        toast('error', message);
-      } finally {
-        setBusy(false);
-      }
+      })();
     },
     [data, formMode, closeForm, toast],
   );
 
   const handleSave = useCallback(
-    async (patch: Partial<Member>) => {
+    (patch: Partial<Member>) => {
       if (formMode?.kind !== 'edit') return;
-      if (Object.keys(patch).length === 0) {
-        closeForm();
-        return;
-      }
-      const name = formMode.member.fullName;
-      setBusy(true);
-      setActionError('');
-      try {
-        await data.updateMember(formMode.member.id, patch);
-        toast('success', `Đã lưu thay đổi cho ${name}`);
-        closeForm();
-      } catch (err) {
-        const message = (err as Error).message;
-        setActionError(message);
-        toast('error', message);
-      } finally {
-        setBusy(false);
-      }
+      const member = formMode.member;
+      closeForm();
+      if (Object.keys(patch).length === 0) return;
+
+      void (async () => {
+        try {
+          await data.updateMember(member.id, patch);
+          toast('success', `Đã lưu thay đổi cho ${member.fullName}`);
+        } catch (err) {
+          toast('error', `Không lưu được ${member.fullName}. ${(err as Error).message}`);
+        }
+      })();
     },
     [data, formMode, closeForm, toast],
   );
 
-  // Gia phả mới tinh chưa có ai để chọn, nên phải cho tạo người đầu tiên
-  // rồi gán luôn làm vị trí của mình.
   const handleCreateSelf = useCallback(
     async (draft: SelfDraft) => {
       setBusy(true);
@@ -150,23 +163,20 @@ export default function App() {
     [data, toast],
   );
 
-  const handleDelete = useCallback(async () => {
+  const handleDelete = useCallback(() => {
     if (!deleteId) return;
     const name = data.graph.members.get(deleteId)?.fullName ?? 'người này';
-    setBusy(true);
-    setActionError('');
-    try {
-      await data.deleteMember(deleteId);
-      if (selectedId === deleteId) setSelectedId(null);
-      setDeleteId(null);
-      toast('success', `Đã xoá ${name} khỏi gia phả`);
-    } catch (err) {
-      const message = (err as Error).message;
-      setActionError(message);
-      toast('error', message);
-    } finally {
-      setBusy(false);
-    }
+    if (selectedId === deleteId) setSelectedId(null);
+    setDeleteId(null);
+
+    void (async () => {
+      try {
+        await data.deleteMember(deleteId);
+        toast('success', `Đã xoá ${name} khỏi gia phả`);
+      } catch (err) {
+        toast('error', `Không xoá được ${name}. ${(err as Error).message}`);
+      }
+    })();
   }, [data, deleteId, selectedId, toast]);
 
   const handleAddNote = useCallback(
@@ -175,7 +185,7 @@ export default function App() {
         await data.addNote(memberId, content);
         toast('success', 'Đã lưu ghi chú');
       } catch (err) {
-        toast('error', (err as Error).message);
+        toast('error', `Không lưu được ghi chú. ${(err as Error).message}`);
       }
     },
     [data, toast],
@@ -187,11 +197,22 @@ export default function App() {
         await data.deleteNote(id);
         toast('success', 'Đã xoá ghi chú');
       } catch (err) {
-        toast('error', (err as Error).message);
+        toast('error', `Không xoá được ghi chú. ${(err as Error).message}`);
       }
     },
     [data, toast],
   );
+
+  const handleRefresh = useCallback(() => {
+    void (async () => {
+      try {
+        await refresh();
+        toast('info', 'Đã lấy bản mới nhất');
+      } catch (err) {
+        toast('error', `Không làm mới được. ${(err as Error).message}`);
+      }
+    })();
+  }, [refresh, toast]);
 
   if (!token) return <LoginCard onSuccess={handleLogin} />;
 
@@ -232,7 +253,11 @@ export default function App() {
   const selected = selectedId ? data.graph.members.get(selectedId) : null;
   const pendingDelete = deleteId ? data.graph.members.get(deleteId) : null;
   const deleteCheck = pendingDelete
-    ? checkCanDelete(data.graph, pendingDelete.id, data.notesByMember.get(pendingDelete.id)?.length ?? 0)
+    ? checkCanDelete(
+        data.graph,
+        pendingDelete.id,
+        data.notesByMember.get(pendingDelete.id)?.length ?? 0,
+      )
     : null;
 
   return (
@@ -258,12 +283,26 @@ export default function App() {
               +
             </button>
           )}
-          <button className="btn btn--icon-lg" type="button" onClick={handleLogout} aria-label="Thoát">
+          <button
+            className="btn btn--icon-lg"
+            type="button"
+            onClick={handleRefresh}
+            disabled={data.busy}
+            aria-label="Lấy bản mới nhất"
+          >
+            ↻
+          </button>
+          <button
+            className="btn btn--icon-lg"
+            type="button"
+            onClick={handleLogout}
+            aria-label="Thoát"
+          >
             ⎋
           </button>
         </div>
         <SearchBar graph={data.graph} myMemberId={data.myMemberId} onSelect={setSelectedId} />
-        {data.refreshing && <span className="refreshbar" aria-hidden="true" />}
+        {data.busy && <span className="refreshbar" aria-hidden="true" />}
       </header>
 
       {IS_DEMO && (
@@ -308,11 +347,11 @@ export default function App() {
       {formMode && (
         <MemberForm
           mode={formMode}
-          busy={busy}
-          error={actionError}
+          busy={false}
+          error=""
           onCancel={closeForm}
-          onCreate={(relation, draft) => void handleCreate(relation, draft)}
-          onSave={(patch) => void handleSave(patch)}
+          onCreate={handleCreate}
+          onSave={handleSave}
         />
       )}
 
@@ -329,16 +368,11 @@ export default function App() {
           consequences={deleteCheck.consequences}
           confirmLabel={deleteCheck.allowed ? 'Xoá' : 'Đã hiểu'}
           danger={deleteCheck.allowed}
-          busy={busy}
-          error={actionError}
           onConfirm={() => {
-            if (deleteCheck.allowed) void handleDelete();
+            if (deleteCheck.allowed) handleDelete();
             else setDeleteId(null);
           }}
-          onCancel={() => {
-            setDeleteId(null);
-            setActionError('');
-          }}
+          onCancel={() => setDeleteId(null)}
         />
       )}
     </div>

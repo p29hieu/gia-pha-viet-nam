@@ -14,6 +14,8 @@
 - [x] **Sửa / xoá thành viên**, xoá ghi chú, có chặn an toàn và xác nhận trước khi xoá
 - [x] **Viết lại giao diện theo hướng mobile-first** cho Safari trên iPhone
 - [x] **Toast thay cho màn hình chờ toàn trang** sau mỗi thao tác ghi
+- [x] **Cập nhật lạc quan**: giao diện đổi ngay, gửi lên ngầm, hỏng thì hoàn nguyên
+- [x] Nút làm mới + tự làm mới khi quay lại app (cho trường hợp 2-3 người cùng sửa)
 
 - [x] Cấp quyền OAuth, chạy `setupSpreadsheet()` — đã tạo đủ 6 sheet và mã quản trị
 - [x] Deploy Web App, gắn URL vào `.env.local` và repository secret `VITE_API_URL`
