@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { diffMember } from '../../domain/edit';
 import type { Gender, Member } from '../../domain/types';
 
 export type Relation = 'con' | 'vo-chong' | 'anh-chi-em' | 'bo' | 'me';
@@ -7,17 +8,21 @@ export interface MemberDraft {
   fullName: string;
   gender: Gender;
   birthDate?: string;
+  deathDate?: string;
   birthOrder?: number;
   address?: string;
   occupation?: string;
 }
 
+export type FormMode = { kind: 'create'; anchor: Member } | { kind: 'edit'; member: Member };
+
 interface Props {
-  anchor: Member;
+  mode: FormMode;
   busy: boolean;
   error: string;
   onCancel: () => void;
-  onSubmit: (relation: Relation, draft: MemberDraft) => void;
+  onCreate: (relation: Relation, draft: MemberDraft) => void;
+  onSave: (patch: Partial<Member>) => void;
 }
 
 const RELATIONS: Array<{ value: Relation; label: string }> = [
@@ -28,69 +33,95 @@ const RELATIONS: Array<{ value: Relation; label: string }> = [
   { value: 'me', label: 'Mẹ' },
 ];
 
-export function MemberForm({ anchor, busy, error, onCancel, onSubmit }: Props) {
-  const [relation, setRelation] = useState<Relation>('con');
-  const [fullName, setFullName] = useState('');
-  const [gender, setGender] = useState<Gender>('M');
-  const [birthDate, setBirthDate] = useState('');
-  const [birthOrder, setBirthOrder] = useState('');
-  const [address, setAddress] = useState('');
-  const [occupation, setOccupation] = useState('');
+export function MemberForm({ mode, busy, error, onCancel, onCreate, onSave }: Props) {
+  const editing = mode.kind === 'edit' ? mode.member : null;
 
-  const lockedGender = relation === 'bo' ? 'M' : relation === 'me' ? 'F' : null;
+  const [relation, setRelation] = useState<Relation>('con');
+  const [fullName, setFullName] = useState(editing?.fullName ?? '');
+  const [gender, setGender] = useState<Gender>(editing?.gender ?? 'M');
+  const [birthDate, setBirthDate] = useState(editing?.birthDate ?? '');
+  const [deathDate, setDeathDate] = useState(editing?.deathDate ?? '');
+  const [birthOrder, setBirthOrder] = useState(
+    editing?.birthOrder != null ? String(editing.birthOrder) : '',
+  );
+  const [address, setAddress] = useState(editing?.address ?? '');
+  const [occupation, setOccupation] = useState(editing?.occupation ?? '');
+
+  const lockedGender = !editing && relation === 'bo' ? 'M' : !editing && relation === 'me' ? 'F' : null;
   const effectiveGender = lockedGender ?? gender;
 
-  function submit(e: FormEvent) {
-    e.preventDefault();
+  function buildDraft(): MemberDraft {
     const order = Number(birthOrder);
-    onSubmit(relation, {
+    return {
       fullName: fullName.trim(),
       gender: effectiveGender,
       birthDate: birthDate.trim() || undefined,
+      deathDate: deathDate.trim() || undefined,
       birthOrder: Number.isFinite(order) && order > 0 ? order : undefined,
       address: address.trim() || undefined,
       occupation: occupation.trim() || undefined,
-    });
+    };
+  }
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    const draft = buildDraft();
+    if (editing) onSave(diffMember(editing, draft));
+    else onCreate(relation, draft);
   }
 
   return (
-    <div className="modal" role="dialog" aria-modal="true" aria-label="Thêm thành viên">
-      <div className="modal__backdrop" onClick={onCancel} />
-      <form className="modal__panel" onSubmit={submit}>
-        <h2 className="modal__title">Thêm người thân</h2>
-        <p className="modal__lead">
-          Người mới sẽ được nối vào gia phả qua <strong>{anchor.fullName}</strong>.
-        </p>
+    <div className="sheet" role="dialog" aria-modal="true" aria-label={editing ? 'Sửa thông tin' : 'Thêm thành viên'}>
+      <button className="sheet__backdrop" type="button" onClick={onCancel} aria-label="Đóng" />
+      <form className="sheet__panel" onSubmit={submit}>
+        <div className="sheet__grip" aria-hidden="true" />
 
-        <fieldset className="chips">
-          <legend className="field__label">Quan hệ với {anchor.fullName}</legend>
-          {RELATIONS.map((r) => (
-            <label className={`chip${relation === r.value ? ' chip--on' : ''}`} key={r.value}>
-              <input
-                type="radio"
-                name="relation"
-                value={r.value}
-                checked={relation === r.value}
-                onChange={() => setRelation(r.value)}
-              />
-              {r.label}
-            </label>
-          ))}
-        </fieldset>
+        <header className="sheet__head">
+          <h2 className="sheet__title">{editing ? 'Sửa thông tin' : 'Thêm người thân'}</h2>
+          <p className="sheet__lead">
+            {editing ? (
+              <>
+                Đang sửa <strong>{editing.fullName}</strong>.
+              </>
+            ) : (
+              <>
+                Người mới sẽ nối vào gia phả qua <strong>{mode.kind === 'create' ? mode.anchor.fullName : ''}</strong>.
+              </>
+            )}
+          </p>
+        </header>
 
-        <label className="field">
-          <span className="field__label">Họ và tên</span>
-          <input
-            className="field__input"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            required
-            autoFocus
-          />
-        </label>
+        <div className="sheet__body">
+          {!editing && mode.kind === 'create' && (
+            <fieldset className="chips">
+              <legend className="field__label">Quan hệ với {mode.anchor.fullName}</legend>
+              {RELATIONS.map((r) => (
+                <label className={`chip${relation === r.value ? ' chip--on' : ''}`} key={r.value}>
+                  <input
+                    type="radio"
+                    name="relation"
+                    value={r.value}
+                    checked={relation === r.value}
+                    onChange={() => setRelation(r.value)}
+                  />
+                  {r.label}
+                </label>
+              ))}
+            </fieldset>
+          )}
 
-        <div className="field-row">
-          <fieldset className="chips chips--tight">
+          <label className="field">
+            <span className="field__label">Họ và tên</span>
+            <input
+              className="field__input"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+              autoComplete="off"
+            />
+          </label>
+
+          <fieldset className="chips">
             <legend className="field__label">Giới tính</legend>
             {(['M', 'F'] as Gender[]).map((g) => (
               <label
@@ -109,59 +140,79 @@ export function MemberForm({ anchor, busy, error, onCancel, onSubmit }: Props) {
             ))}
           </fieldset>
 
-          <label className="field field--narrow">
-            <span className="field__label">Con thứ mấy</span>
+          <label className="field">
+            <span className="field__label">Con thứ mấy trong nhà</span>
             <input
               className="field__input"
               value={birthOrder}
               onChange={(e) => setBirthOrder(e.target.value)}
               inputMode="numeric"
+              pattern="[0-9]*"
               placeholder="1"
             />
+            <span className="field__hint">
+              Quan trọng hơn năm sinh khi tính vai anh/chị/em.
+            </span>
           </label>
+
+          <label className="field">
+            <span className="field__label">Ngày sinh</span>
+            <input
+              className="field__input"
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
+              placeholder="1960 · 1960-05 · 1960-05-12"
+              autoComplete="off"
+            />
+            <span className="field__hint">Chỉ nhớ năm cũng được.</span>
+          </label>
+
+          <label className="field">
+            <span className="field__label">Ngày mất</span>
+            <input
+              className="field__input"
+              value={deathDate}
+              onChange={(e) => setDeathDate(e.target.value)}
+              placeholder="để trống nếu còn sống"
+              autoComplete="off"
+            />
+          </label>
+
+          <label className="field">
+            <span className="field__label">Địa chỉ hiện tại</span>
+            <input
+              className="field__input"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              autoComplete="off"
+            />
+          </label>
+
+          <label className="field">
+            <span className="field__label">Công việc hiện tại</span>
+            <input
+              className="field__input"
+              value={occupation}
+              onChange={(e) => setOccupation(e.target.value)}
+              autoComplete="off"
+            />
+          </label>
+
+          {error && (
+            <p className="alert alert--danger" role="alert">
+              {error}
+            </p>
+          )}
         </div>
 
-        <label className="field">
-          <span className="field__label">Ngày sinh</span>
-          <input
-            className="field__input"
-            value={birthDate}
-            onChange={(e) => setBirthDate(e.target.value)}
-            placeholder="1960 hoặc 1960-05 hoặc 1960-05-12"
-          />
-          <span className="field__hint">
-            Chỉ nhớ năm cũng được — thứ tự sinh quan trọng hơn cho việc tính vai vế.
-          </span>
-        </label>
-
-        <label className="field">
-          <span className="field__label">Địa chỉ hiện tại</span>
-          <input className="field__input" value={address} onChange={(e) => setAddress(e.target.value)} />
-        </label>
-
-        <label className="field">
-          <span className="field__label">Công việc hiện tại</span>
-          <input
-            className="field__input"
-            value={occupation}
-            onChange={(e) => setOccupation(e.target.value)}
-          />
-        </label>
-
-        {error && (
-          <p className="login__error" role="alert">
-            {error}
-          </p>
-        )}
-
-        <div className="modal__actions">
-          <button className="btn btn--ghost" type="button" onClick={onCancel}>
+        <footer className="sheet__actions">
+          <button className="btn" type="button" onClick={onCancel}>
             Huỷ
           </button>
           <button className="btn btn--primary" type="submit" disabled={busy || !fullName.trim()}>
-            {busy ? 'Đang lưu…' : 'Thêm vào gia phả'}
+            {busy ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Thêm vào gia phả'}
           </button>
-        </div>
+        </footer>
       </form>
     </div>
   );

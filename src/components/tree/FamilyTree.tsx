@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FamilyGraph } from '../../domain/graph';
 import { computeLayout } from '../../domain/layout';
 import { PersonCard } from '../person/PersonCard';
@@ -18,6 +18,25 @@ export function FamilyTree({ graph, myMemberId, selectedId, onSelect }: Props) {
   const layout = useMemo(() => computeLayout(graph), [graph]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState(1);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Gia phả rộng hơn màn hình điện thoại rất nhiều, nên mở ra là đưa thẳng
+  // người dùng tới vị trí của chính họ thay vì bắt tự cuộn đi tìm.
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || !myMemberId) return;
+    const card = container.querySelector<HTMLElement>(`[data-member-id="${myMemberId}"]`);
+    if (!card) return;
+    // Đo bằng getBoundingClientRect chứ không dùng offsetLeft: cây có transform
+    // scale và nhiều tầng position:relative nên offsetParent không phải khung cuộn.
+    const frame = requestAnimationFrame(() => {
+      const box = container.getBoundingClientRect();
+      const target = card.getBoundingClientRect();
+      container.scrollLeft += target.left - box.left - (box.width - target.width) / 2;
+      container.scrollTop += target.top - box.top - (box.height - target.height) / 2;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [myMemberId, layout]);
 
   const toggle = (id: string) =>
     setCollapsed((prev) => {
@@ -56,7 +75,7 @@ export function FamilyTree({ graph, myMemberId, selectedId, onSelect }: Props) {
         </button>
       </div>
 
-      <div className="tree-scroll">
+      <div className="tree-scroll" ref={scrollRef}>
         <div className="tree" style={{ transform: `scale(${zoom})` }}>
           <ul className="tree__level tree__level--root">
             {layout.roots.map((id) => (

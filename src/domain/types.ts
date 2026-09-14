@@ -34,6 +34,8 @@ export interface Note {
   authorName: string;
   content: string;
   createdAt: string;
+  /** Ghi chú này do chính mình viết — máy chủ tự tính, không lộ mã của người khác. */
+  mine?: boolean;
 }
 
 /** Bên nội (qua bố) hay bên ngoại (qua mẹ) */

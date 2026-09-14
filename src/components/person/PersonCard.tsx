@@ -30,7 +30,12 @@ export function PersonCard({ member, graph, myMemberId, selected, echo, onSelect
     .join(' ');
 
   return (
-    <button className={classes} type="button" onClick={() => onSelect(member.id)}>
+    <button
+      className={classes}
+      type="button"
+      data-member-id={member.id}
+      onClick={() => onSelect(member.id)}
+    >
       <Avatar member={member} size={38} />
       <span className="person-card__body">
         <span className="person-card__name">{member.fullName}</span>

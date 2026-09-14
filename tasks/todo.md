@@ -11,6 +11,9 @@
 - [x] **GĐ 6 — Cây gia phả & tìm kiếm**: bố cục cây, thu gọn nhánh, zoom, tìm không dấu
 - [x] **GĐ 7 — Kiểm thử**: 82 test xanh, kiểm tra thủ công trên Chrome ở desktop và 375px
 
+- [x] **Sửa / xoá thành viên**, xoá ghi chú, có chặn an toàn và xác nhận trước khi xoá
+- [x] **Viết lại giao diện theo hướng mobile-first** cho Safari trên iPhone
+
 ## Còn lại
 
 - [ ] Cấp quyền OAuth cho Apps Script rồi chạy `setupSpreadsheet()` *(cần anh Hiếu bấm Allow)*
@@ -34,6 +37,19 @@ người có huyết thống ánh xạ thẳng `bố → mẹ`. Đã tách riên
 
 **Quyết định kiến trúc**: tải toàn bộ gia phả về client một lần thay vì gọi API theo từng
 thao tác, vì Apps Script mất 1–3 giây mỗi lần gọi. Gia phả vài nghìn người vẫn rất nhẹ.
+
+**Lỗ hổng bảo mật tự rà ra khi làm phần xoá**: `bootstrap` trả nguyên cột `authorCode`
+của mọi ghi chú, nghĩa là bất kỳ ai đăng nhập cũng đọc được mã số của người khác. Với cơ
+chế đăng nhập chỉ bằng mã số thì đó là lộ toàn bộ gia phả. Đã lọc bỏ `authorCode` ở máy
+chủ và thay bằng cờ `mine`. Chưa ai kịp dùng bản cũ nên không cần đổi mã.
+
+**Lỗi bố cục bắt được khi test trên khổ iPhone**: thanh trên và ô tìm kiếm tràn khỏi màn
+hình, vì cột grid của `.shell` để `1fr` nên co giãn theo bề rộng `max-content` của cây gia
+phả bên trong. Đổi sang `minmax(0, 1fr)` và thêm `min-width: 0` cho các khung con.
+
+**Lỗi cuộn bắt được khi thêm tính năng tự tìm "Tôi"**: dùng `offsetLeft` để tính vị trí
+cuộn là sai, vì cây có `transform: scale` và nhiều tầng `position: relative` nên
+`offsetParent` không phải khung cuộn. Đổi sang đo bằng `getBoundingClientRect`.
 
 **Quyết định về bố cục cây**: mỗi người có đúng một nút gốc (treo dưới cha, hoặc mẹ nếu
 không rõ cha) để không ai bị vẽ hai lần kèm cả nhánh con. Vợ/chồng vẫn hiện cạnh nhau;

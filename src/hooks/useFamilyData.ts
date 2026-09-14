@@ -104,6 +104,24 @@ export function useFamilyData(token: string | null) {
     [token],
   );
 
+  const deleteMember = useCallback(
+    async (id: string) => {
+      if (!token) return;
+      await api.deleteMember(token, id);
+      await load(token);
+    },
+    [token, load],
+  );
+
+  const deleteNote = useCallback(
+    async (id: string) => {
+      if (!token) return;
+      await api.deleteNote(token, id);
+      setState((s) => ({ ...s, notes: s.notes.filter((n) => n.id !== id) }));
+    },
+    [token],
+  );
+
   const canEdit = state.role === 'admin' || state.role === 'editor';
 
   return {
@@ -114,7 +132,9 @@ export function useFamilyData(token: string | null) {
     chooseMyPosition,
     addMember,
     updateMember,
+    deleteMember,
     addNote,
+    deleteNote,
     reload: load,
   };
 }

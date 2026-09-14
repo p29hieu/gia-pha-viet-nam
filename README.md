@@ -14,8 +14,21 @@ xuất bản qua GitHub Pages.
 - Cây gia phả dạng thẻ, thu gọn / mở rộng từng nhánh, phóng to thu nhỏ
 - **Tra cứu danh xưng hai chiều** kèm diễn giải "có họ thông qua ai"
 - Thêm thành viên (con, vợ/chồng, anh chị em, bố, mẹ)
-- Ghi chú cho từng người, ai cũng đọc được
+- **Sửa** thông tin và **xoá** khỏi gia phả, có chặn an toàn
+- Ghi chú cho từng người, ai cũng đọc được; tự xoá được ghi chú của mình
 - Tìm kiếm theo tên, gõ không dấu vẫn ra
+
+## Thiết kế cho điện thoại trước
+
+Phần lớn người trong họ mở gia phả trên điện thoại, nên giao diện lấy mobile làm gốc
+rồi mới mở rộng lên máy tính, và xử lý riêng các đặc thù của Safari trên iOS:
+
+- `100dvh` thay cho `100vh` — thanh công cụ Safari co giãn làm `100vh` nhảy
+- `env(safe-area-inset-*)` cho tai thỏ và vạch home
+- Mọi ô nhập giữ cỡ chữ 16px, dưới mốc đó Safari tự phóng to trang khi chạm vào
+- Vùng chạm tối thiểu 44px, trạng thái hover chỉ bật trên thiết bị thực sự có chuột
+- Bảng thông tin trượt lên từ đáy màn hình, thanh nút cố định trong vùng an toàn
+- Mở cây là tự cuộn tới thẻ của chính mình, không bắt người dùng đi tìm
 
 ## Chạy thử ngay, không cần Google Sheet
 
@@ -87,11 +100,25 @@ pnpm test:coverage  # kiểm tra độ phủ
 pnpm build          # build production
 ```
 
+## Xoá an toàn
+
+Xoá một người là thao tác không hoàn tác được, nên hệ thống:
+
+- **Chặn hẳn** khi người đó còn con nối vào — xoá đi thì cả nhánh bên dưới mất gốc mà
+  người dùng không nhìn thấy điều đó xảy ra. Thông báo nêu đích danh những người con để
+  biết đường xử lý.
+- Nói trước hệ quả: gỡ bao nhiêu liên kết vợ/chồng, xoá bao nhiêu ghi chú.
+- Kiểm tra hai lần: ở trình duyệt để giải thích cho người dùng, và ở Apps Script để
+  không ai lách được bằng cách gọi thẳng API.
+
 ## Bảo mật
 
 Đăng nhập chỉ bằng mã số, nên mã được sinh dài và ngẫu nhiên (`GP-7K4M-2XQ9`), có giới hạn
 số lần nhập sai, và phiên đăng nhập dùng token ký HMAC hết hạn sau 7 ngày.
 **Mã số là thứ duy nhất bảo vệ dữ liệu dòng họ — đừng chia sẻ công khai.**
+
+Máy chủ **không bao giờ trả mã số của người khác về trình duyệt**. Ghi chú gửi về chỉ kèm
+tên người viết và một cờ cho biết có phải của chính mình hay không.
 
 Mã nguồn công khai nhưng dữ liệu thì không: toàn bộ gia phả nằm trong Google Sheet riêng của
 bạn, không có gì trong repo này.

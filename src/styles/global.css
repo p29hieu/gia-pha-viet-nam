@@ -7,25 +7,33 @@
 }
 
 html,
-body,
-#root {
+body {
   height: 100%;
 }
 
 body {
   margin: 0;
+  /* Vỏ ứng dụng cố định, chỉ các vùng bên trong mới cuộn — tránh hiện tượng
+     cả trang nảy lên xuống khi vuốt trên Safari iOS. */
+  overflow: hidden;
+  overscroll-behavior: none;
   font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: 1.55;
   color: var(--ink);
   background-color: var(--paper);
-  /* Vân giấy rất nhẹ, tạo chất liệu thay vì nền phẳng */
   background-image:
     radial-gradient(oklch(24% 0.02 62 / 0.022) 1px, transparent 1px),
     radial-gradient(oklch(24% 0.02 62 / 0.016) 1px, transparent 1px);
   background-size: 22px 22px, 37px 37px;
   background-position: 0 0, 11px 19px;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+
+#root {
+  height: 100%;
+  overflow: hidden;
 }
 
 h1,
@@ -41,6 +49,8 @@ h3 {
 button {
   font: inherit;
   cursor: pointer;
+  /* Safari tô một mảng xám khi chạm; tự vẽ trạng thái :active cho chủ động. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 input,
@@ -48,6 +58,7 @@ select,
 textarea {
   font: inherit;
   color: inherit;
+  -webkit-tap-highlight-color: transparent;
 }
 
 :focus-visible {

@@ -60,6 +60,8 @@ function doPost(e) {
       case 'addMember':      return handleAddMember_(auth, req);
       case 'updateMember':   return handleUpdateMember_(auth, req);
       case 'addNote':        return handleAddNote_(auth, req);
+      case 'deleteMember':   return handleDeleteMember_(auth, req);
+      case 'deleteNote':     return handleDeleteNote_(auth, req);
       default:               return fail_('Khong ro action: ' + action);
     }
   } catch (err) {
@@ -99,7 +101,17 @@ function handleBootstrap_(auth) {
     me: { code: auth.code, role: auth.role, memberId: auth.memberId, label: auth.label },
     members: readSheet_('Members'),
     marriages: readSheet_('Marriages'),
-    notes: readSheet_('Notes'),
+    // KHONG tra ve authorCode: dang nhap chi bang ma so, lo ma la lo ca gia pha.
+    notes: readSheet_('Notes').map(function (n) {
+      return {
+        id: n.id,
+        memberId: n.memberId,
+        authorName: n.authorName,
+        content: n.content,
+        createdAt: n.createdAt,
+        mine: n.authorCode === auth.code,
+      };
+    }),
     config: readSheet_('Config'),
   });
 }
@@ -196,6 +208,62 @@ function handleAddNote_(auth, req) {
     appendRow_('Notes', note);
     audit_(auth.code, 'addNote', memberId, '');
     return jsonOut_({ ok: true, note: note });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleDeleteMember_(auth, req) {
+  if (!canEdit_(auth)) return fail_('Ban khong co quyen xoa thanh vien', 403);
+  var id = String(req.id || '').trim();
+  var row = findMemberRow_(id);
+  if (!row) return fail_('Khong tim thay thanh vien');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    // Khong cho xoa nguoi dang co con noi vao, neu khong ca nhanh ben duoi se mo coi.
+    var children = readSheet_('Members').filter(function (m) {
+      return m.fatherId === id || m.motherId === id;
+    });
+    if (children.length > 0) {
+      var names = children.slice(0, 5).map(function (c) { return c.fullName; }).join(', ');
+      return fail_(
+        'Khong the xoa ' + row.data.fullName + ' vi con ' + children.length +
+        ' nguoi dang nhan lam cha/me: ' + names +
+        (children.length > 5 ? '...' : '') +
+        '. Hay xoa hoac chuyen nhung nguoi do sang cha/me khac truoc.',
+      );
+    }
+
+    deleteRowsWhere_('Notes', function (n) { return n.memberId === id; });
+    deleteRowsWhere_('Marriages', function (w) {
+      return w.husbandId === id || w.wifeId === id;
+    });
+    clearMemberLinks_(id);
+    sheet_('Members').deleteRow(row.rowIndex);
+
+    audit_(auth.code, 'deleteMember', id, row.data.fullName);
+    return jsonOut_({ ok: true });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleDeleteNote_(auth, req) {
+  var id = String(req.id || '').trim();
+  var row = findRowBy_('Notes', 'id', id);
+  if (!row) return fail_('Khong tim thay ghi chu');
+  if (row.data.authorCode !== auth.code && auth.role !== 'admin') {
+    return fail_('Chi nguoi viet hoac quan tri moi xoa duoc ghi chu nay', 403);
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    sheet_('Notes').deleteRow(row.rowIndex);
+    audit_(auth.code, 'deleteNote', row.data.memberId, '');
+    return jsonOut_({ ok: true });
   } finally {
     lock.releaseLock();
   }
@@ -346,6 +414,35 @@ function addMarriage_(newMemberId, gender, spouseId) {
     endDate: '',
     order: 1,
   });
+}
+
+/** Xoa tu duoi len tren de chi so dong khong bi truot. */
+function deleteRowsWhere_(name, predicate) {
+  var sh = sheet_(name);
+  var values = sh.getDataRange().getValues();
+  if (values.length < 2) return 0;
+  var headers = values[0];
+  var targets = [];
+  for (var r = 1; r < values.length; r++) {
+    var obj = {};
+    for (var c = 0; c < headers.length; c++) obj[headers[c]] = normalizeCell_(values[r][c]);
+    if (predicate(obj)) targets.push(r + 1);
+  }
+  targets.sort(function (a, b) { return b - a; });
+  targets.forEach(function (rowIndex) { sh.deleteRow(rowIndex); });
+  return targets.length;
+}
+
+/** Go lien ket vi tri cua nguoi vua bi xoa khoi cac ma dang nhap. */
+function clearMemberLinks_(id) {
+  var sh = sheet_('AccessCodes');
+  var values = sh.getDataRange().getValues();
+  if (values.length < 2) return;
+  var col = SHEET_HEADERS.AccessCodes.indexOf('memberId') + 1;
+  if (col <= 0) return;
+  for (var r = 1; r < values.length; r++) {
+    if (String(values[r][col - 1]).trim() === id) sh.getRange(r + 1, col).setValue('');
+  }
 }
 
 function audit_(code, action, targetId, detail) {

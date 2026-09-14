@@ -195,6 +195,7 @@ export async function addNote(token: string, memberId: string, content: string):
     authorName: 'Bản demo',
     content,
     createdAt: new Date().toISOString(),
+    mine: true,
   };
   if (IS_DEMO) {
     const s = loadDemo();
@@ -203,6 +204,30 @@ export async function addNote(token: string, memberId: string, content: string):
   }
   const res = await call<{ note: Note }>('addNote', { token, memberId, content });
   return res.note;
+}
+
+export async function deleteMember(token: string, id: string): Promise<void> {
+  if (IS_DEMO) {
+    const s = loadDemo();
+    saveDemo({
+      ...s,
+      members: s.members.filter((m) => m.id !== id),
+      marriages: s.marriages.filter((w) => w.husbandId !== id && w.wifeId !== id),
+      notes: s.notes.filter((n) => n.memberId !== id),
+      myMemberId: s.myMemberId === id ? '' : s.myMemberId,
+    });
+    return;
+  }
+  await call('deleteMember', { token, id });
+}
+
+export async function deleteNote(token: string, id: string): Promise<void> {
+  if (IS_DEMO) {
+    const s = loadDemo();
+    saveDemo({ ...s, notes: s.notes.filter((n) => n.id !== id) });
+    return;
+  }
+  await call('deleteNote', { token, id });
 }
 
 export function resetDemo(): void {
