@@ -1,0 +1,62 @@
+:root {
+  color-scheme: light;
+
+  /* Giấy dó — nền ấm hơi ngả vàng như giấy gia phả cũ */
+  --paper: oklch(96.6% 0.015 88);
+  --paper-raised: oklch(99.2% 0.007 88);
+  --paper-sunk: oklch(93.2% 0.02 86);
+
+  /* Mực nho */
+  --ink: oklch(24% 0.021 62);
+  --ink-soft: oklch(46% 0.018 62);
+  --ink-faint: oklch(63% 0.014 62);
+
+  /* Son — màu dấu triện, dùng cho nhấn mạnh và cho chính "tôi" */
+  --son: oklch(51% 0.17 32);
+  --son-deep: oklch(42% 0.15 32);
+  --son-wash: oklch(94% 0.032 32);
+
+  /* Lục — dùng cho bên ngoại để phân biệt với bên nội */
+  --jade: oklch(46% 0.07 168);
+  --jade-wash: oklch(94% 0.024 168);
+
+  --line: oklch(87% 0.015 80);
+  --line-strong: oklch(78% 0.02 80);
+
+  --font-serif: 'Lora', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: clamp(1.25rem, 1.1rem + 0.7vw, 1.6rem);
+  --text-display: clamp(1.75rem, 1.3rem + 2.2vw, 3rem);
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 14px;
+
+  --shadow-card: 0 1px 2px oklch(24% 0.02 62 / 0.06), 0 4px 12px oklch(24% 0.02 62 / 0.05);
+  --shadow-raised: 0 2px 6px oklch(24% 0.02 62 / 0.09), 0 12px 32px oklch(24% 0.02 62 / 0.1);
+
+  --duration: 180ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
