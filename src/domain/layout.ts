@@ -1,4 +1,5 @@
 import { compareSeniority, getSpouses, type FamilyGraph } from './graph';
+import { placementParents } from './relations';
 
 /**
  * Bố cục cây theo lối gia phả truyền thống.
@@ -13,18 +14,16 @@ function inTree(graph: FamilyGraph, id: string | undefined): boolean {
 }
 
 export function hasParentsInTree(graph: FamilyGraph, id: string): boolean {
-  const m = graph.members.get(id);
-  if (!m) return false;
-  return inTree(graph, m.fatherId) || inTree(graph, m.motherId);
+  return placementParents(graph.members.get(id)).some((p) => inTree(graph, p));
 }
 
-/** Cha nếu có trong dữ liệu, ngược lại là mẹ. Quyết định người này treo dưới ai. */
+/**
+ * Người này treo dưới ai trong cây.
+ * Ưu tiên cha ruột, rồi mẹ ruột, rồi cha nuôi, rồi mẹ nuôi. Cha mẹ đỡ đầu
+ * không quyết định chỗ đứng trong cây vì đó không phải quan hệ gia đình.
+ */
 export function primaryParent(graph: FamilyGraph, id: string): string | null {
-  const m = graph.members.get(id);
-  if (!m) return null;
-  if (inTree(graph, m.fatherId)) return m.fatherId ?? null;
-  if (inTree(graph, m.motherId)) return m.motherId ?? null;
-  return null;
+  return placementParents(graph.members.get(id)).find((p) => inTree(graph, p)) ?? null;
 }
 
 export interface TreeLayout {

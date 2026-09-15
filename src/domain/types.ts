@@ -11,8 +11,15 @@ export interface Member {
   birthOrder?: number;
   address?: string;
   occupation?: string;
+  /** Cha mẹ ruột — cơ sở duy nhất để tính danh xưng và dựng cây huyết thống. */
   fatherId?: string;
   motherId?: string;
+  /** Cha mẹ nuôi. Ghi riêng để không lẫn vào huyết thống. */
+  adoptiveFatherId?: string;
+  adoptiveMotherId?: string;
+  /** Cha mẹ đỡ đầu. */
+  godFatherId?: string;
+  godMotherId?: string;
   photoUrl?: string;
 }
 
@@ -41,7 +48,13 @@ export interface Note {
 /** Bên nội (qua bố) hay bên ngoại (qua mẹ) */
 export type Side = 'noi' | 'ngoai';
 
-export type KinCategory = 'ban-than' | 'huyet-thong' | 'hon-nhan' | 'ben-vo-chong' | 'khong-xac-dinh';
+export type KinCategory =
+  | 'ban-than'
+  | 'huyet-thong'
+  | 'hon-nhan'
+  | 'ben-vo-chong'
+  | 'nuoi-duong'
+  | 'khong-xac-dinh';
 
 /** Một chặng trong chuỗi "có họ thông qua ai" */
 export interface KinPathStep {
@@ -64,6 +77,12 @@ export interface Kinship {
   commonAncestorId: string | null;
   /** Chuỗi liên kết từ tôi tới người đó */
   path: KinPathStep[];
+  /**
+   * Quan hệ nuôi hoặc đỡ đầu giữa hai người, nếu có.
+   * KHÔNG tính vào danh xưng huyết thống — chỉ hiển thị kèm, vì nó là lời khai
+   * báo trực tiếp chứ không phải quan hệ máu mủ suy ra được từ cây.
+   */
+  care?: { callThem: string; theyCallMe: string };
   explanation: string;
   warnings: string[];
 }

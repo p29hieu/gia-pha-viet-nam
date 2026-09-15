@@ -25,6 +25,10 @@ export function buildGraph(members: Member[], marriages: Marriage[] = []): Famil
   members.forEach((m) => {
     push(m.fatherId, m.id);
     push(m.motherId, m.id);
+    // Cha mẹ nuôi được tính như cha mẹ khi lần ra quan hệ: anh của bố nuôi vẫn
+    // là bác. Cha mẹ đỡ đầu thì không — đó không phải quan hệ gia đình.
+    push(m.adoptiveFatherId, m.id);
+    push(m.adoptiveMotherId, m.id);
   });
 
   const spousesOf = new Map<string, string[]>();
@@ -62,10 +66,26 @@ export function getChildren(graph: FamilyGraph, id: string): string[] {
   return graph.childrenOf.get(id) ?? [];
 }
 
+/**
+ * Cha mẹ dùng để lần ra quan hệ: gồm cả ruột lẫn nuôi.
+ * Cha mẹ đỡ đầu KHÔNG nằm ở đây vì không phải quan hệ gia đình.
+ */
 export function getParents(graph: FamilyGraph, id: string): string[] {
   const m = graph.members.get(id);
   if (!m) return [];
-  return [m.fatherId, m.motherId].filter((x): x is string => Boolean(x));
+  return [m.fatherId, m.motherId, m.adoptiveFatherId, m.adoptiveMotherId].filter(
+    (x): x is string => Boolean(x),
+  );
+}
+
+/** Người này là cha/mẹ NUÔI của người kia, hay ngược lại, hay không phải. */
+export function adoptiveDirection(
+  a: Member,
+  b: Member,
+): 'b-la-cha-me-nuoi' | 'b-la-con-nuoi' | null {
+  if (a.adoptiveFatherId === b.id || a.adoptiveMotherId === b.id) return 'b-la-cha-me-nuoi';
+  if (b.adoptiveFatherId === a.id || b.adoptiveMotherId === a.id) return 'b-la-con-nuoi';
+  return null;
 }
 
 /** Anh chị em ruột hoặc nửa ruột (chung ít nhất một cha hoặc mẹ) */

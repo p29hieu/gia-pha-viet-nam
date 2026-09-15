@@ -81,6 +81,10 @@ export function spouseOfTerm(relativeTerm: string, spouseGender: Gender): string
     'dì họ': 'chú họ',
     'con trai': 'con dâu',
     'con gái': 'con rể',
+    // Quan hệ nuôi: vợ của bố nuôi chính là mẹ nuôi.
+    'bố nuôi': 'mẹ nuôi',
+    'mẹ nuôi': 'bố nuôi',
+    'con nuôi': 'con dâu nuôi',
     'ông bác': 'bà bác',
     'bà bác': 'ông bác',
     'ông trẻ': 'bà trẻ',

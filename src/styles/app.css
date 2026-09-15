@@ -851,3 +851,10 @@ button.lineage__name:active { color: var(--son); }
   .relation-row__btn:hover { background: var(--son-wash); }
   .relation-row__btn--danger:hover { color: var(--son-deep); }
 }
+
+.kin__care {
+  padding: var(--space-2) var(--space-3);
+  background: var(--paper-sunk);
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--jade);
+}

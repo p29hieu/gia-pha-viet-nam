@@ -245,3 +245,79 @@ describe('tính đối xứng', () => {
     }
   });
 });
+
+describe('nuôi tính như huyết thống, đỡ đầu thì không', () => {
+  // ego được bác (anh của bố) nhận làm con nuôi, và có mẹ đỡ đầu là cô.
+  const g = buildGraph(
+    SAMPLE_MEMBERS.map((m) =>
+      m.id === 'em_cung_cha' ? { ...m, adoptiveFatherId: 'bac_noi', godMotherId: 'co' } : m,
+    ),
+    SAMPLE_MARRIAGES,
+  );
+
+  it('cha nuôi được gọi là "bố nuôi", nói rõ là nuôi', () => {
+    const k = resolveKinship(g, 'em_cung_cha', 'bac_noi');
+    expect(k.callThem).toBe('bố nuôi');
+    expect(k.theyCallMe).toBe('con nuôi');
+  });
+
+  it('vợ của bố nuôi chính là mẹ nuôi', () => {
+    expect(resolveKinship(g, 'em_cung_cha', 'bac_noi_vo').callThem).toBe('mẹ nuôi');
+  });
+
+  it('con của cha nuôi thành anh chị em', () => {
+    const k = resolveKinship(g, 'em_cung_cha', 'con_bac');
+    expect(['anh', 'em trai']).toContain(k.callThem);
+  });
+
+  it('bố nuôi vẫn giữ được quan hệ ruột thịt sẵn có với người khác', () => {
+    expect(resolveKinship(g, 'em_cung_cha', 'bo').callThem).toBe('bố');
+  });
+
+  it('mẹ đỡ đầu KHÔNG tính huyết thống: danh xưng giữ nguyên theo họ hàng', () => {
+    const k = resolveKinship(g, 'em_cung_cha', 'co');
+    expect(k.callThem).toBe('cô');
+    expect(k.care?.callThem).toBe('mẹ đỡ đầu');
+    expect(k.care?.theyCallMe).toBe('con đỡ đầu');
+  });
+
+  it('không có quan hệ nào khác thì đỡ đầu thành câu trả lời chính', () => {
+    const g2 = buildGraph(
+      [
+        { id: 'a', fullName: 'A', gender: 'F' },
+        { id: 'b', fullName: 'B', gender: 'M', godMotherId: 'a' },
+      ],
+      [],
+    );
+    const k = resolveKinship(g2, 'b', 'a');
+    expect(k.callThem).toBe('mẹ đỡ đầu');
+    expect(k.category).toBe('nuoi-duong');
+  });
+
+  it('người đỡ đầu không lọt vào cây huyết thống', () => {
+    const g2 = buildGraph(
+      [
+        { id: 'a', fullName: 'A', gender: 'F' },
+        { id: 'b', fullName: 'B', gender: 'M', godMotherId: 'a' },
+        { id: 'c', fullName: 'C', gender: 'M', motherId: 'a' },
+      ],
+      [],
+    );
+    // B và C KHÔNG thành anh em chỉ vì A đỡ đầu B — đây chính là điểm cần chặn.
+    expect(resolveKinship(g2, 'b', 'c').category).toBe('khong-xac-dinh');
+    // Nhưng nếu A nhận nuôi B thì hai đứa thành anh em thật.
+    const g3 = buildGraph(
+      [
+        { id: 'a', fullName: 'A', gender: 'F' },
+        { id: 'b', fullName: 'B', gender: 'M', adoptiveMotherId: 'a', birthDate: '1990' },
+        { id: 'c', fullName: 'C', gender: 'M', motherId: 'a', birthDate: '1995' },
+      ],
+      [],
+    );
+    expect(resolveKinship(g3, 'b', 'c').callThem).toBe('em trai');
+  });
+
+  it('không có quan hệ nuôi hay đỡ đầu thì trường care để trống', () => {
+    expect(resolveKinship(g, 'ego', 'bo').care).toBeUndefined();
+  });
+});

@@ -20,7 +20,7 @@ import { ToastStack } from './components/ui/Toast';
 import { checkCanDelete } from './domain/edit';
 import { getSpouses } from './domain/graph';
 import { marriagesOf, spouseIn } from './domain/marriage';
-import { canSetParent, canSetSpouse } from './domain/relations';
+import { SLOTS, canSetParent, canSetSpouse, type ParentSlot } from './domain/relations';
 import type { Member } from './domain/types';
 import { useFamilyData } from './hooks/useFamilyData';
 import { useSession } from './hooks/useSession';
@@ -249,10 +249,10 @@ export default function App() {
   );
 
   const datChaMe = useCallback(
-    (childId: string, slot: 'father' | 'mother', parentId: string) => {
-      const nhan = slot === 'father' ? 'bố' : 'mẹ';
+    (childId: string, slot: ParentSlot, parentId: string) => {
+      const nhan = SLOTS[slot].label.toLowerCase();
       void chay(
-        () => data.updateMember(childId, slot === 'father' ? { fatherId: parentId } : { motherId: parentId }),
+        () => data.updateMember(childId, { [SLOTS[slot].field]: parentId }),
         `Đã đặt ${tenCua(parentId)} làm ${nhan} của ${tenCua(childId)}`,
         `Không đặt được ${nhan}.`,
       );
@@ -261,10 +261,10 @@ export default function App() {
   );
 
   const goChaMe = useCallback(
-    (childId: string, slot: 'father' | 'mother') => {
-      const nhan = slot === 'father' ? 'bố' : 'mẹ';
+    (childId: string, slot: ParentSlot) => {
+      const nhan = SLOTS[slot].label.toLowerCase();
       void chay(
-        () => data.updateMember(childId, slot === 'father' ? { fatherId: '' } : { motherId: '' }),
+        () => data.updateMember(childId, { [SLOTS[slot].field]: '' }),
         `Đã gỡ ${nhan} của ${tenCua(childId)}`,
         `Không gỡ được ${nhan}.`,
       );
@@ -533,24 +533,13 @@ export default function App() {
         <JoinRequestsPanel onClose={() => setShowRequests(false)} onChanged={() => undefined} />
       )}
 
-      {relationEdit?.kind === 'pick-father' && (
+      {relationEdit?.kind === 'pick-parent' && (
         <MemberPicker
-          title="Chọn bố"
-          lead={`Chọn người trong gia phả làm bố của ${tenCua(relationEdit.memberId)}.`}
+          title={`Chọn ${SLOTS[relationEdit.slot].label.toLowerCase()}`}
+          lead={`Chọn người trong gia phả làm ${SLOTS[relationEdit.slot].label.toLowerCase()} của ${tenCua(relationEdit.memberId)}.`}
           members={data.members}
-          check={(c) => canSetParent(data.graph, relationEdit.memberId, c.id, 'father')}
-          onPick={(id) => datChaMe(relationEdit.memberId, 'father', id)}
-          onCancel={() => setRelationEdit(null)}
-        />
-      )}
-
-      {relationEdit?.kind === 'pick-mother' && (
-        <MemberPicker
-          title="Chọn mẹ"
-          lead={`Chọn người trong gia phả làm mẹ của ${tenCua(relationEdit.memberId)}.`}
-          members={data.members}
-          check={(c) => canSetParent(data.graph, relationEdit.memberId, c.id, 'mother')}
-          onPick={(id) => datChaMe(relationEdit.memberId, 'mother', id)}
+          check={(c) => canSetParent(data.graph, relationEdit.memberId, c.id, relationEdit.slot)}
+          onPick={(id) => datChaMe(relationEdit.memberId, relationEdit.slot, id)}
           onCancel={() => setRelationEdit(null)}
         />
       )}
@@ -566,18 +555,13 @@ export default function App() {
         />
       )}
 
-      {(relationEdit?.kind === 'clear-father' || relationEdit?.kind === 'clear-mother') && (
+      {relationEdit?.kind === 'clear-parent' && (
         <ConfirmDialog
-          title={relationEdit.kind === 'clear-father' ? 'Gỡ bố?' : 'Gỡ mẹ?'}
-          message={`${tenCua(relationEdit.memberId)} sẽ không còn ghi nhận ${relationEdit.kind === 'clear-father' ? 'bố' : 'mẹ'} nữa. Người kia vẫn ở trong gia phả.`}
+          title={`Gỡ ${SLOTS[relationEdit.slot].label.toLowerCase()}?`}
+          message={`${tenCua(relationEdit.memberId)} sẽ không còn ghi nhận ${SLOTS[relationEdit.slot].label.toLowerCase()} nữa. Người kia vẫn ở trong gia phả.`}
           confirmLabel="Gỡ"
           danger
-          onConfirm={() =>
-            goChaMe(
-              relationEdit.memberId,
-              relationEdit.kind === 'clear-father' ? 'father' : 'mother',
-            )
-          }
+          onConfirm={() => goChaMe(relationEdit.memberId, relationEdit.slot)}
           onCancel={() => setRelationEdit(null)}
         />
       )}

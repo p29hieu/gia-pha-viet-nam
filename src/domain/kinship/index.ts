@@ -1,10 +1,12 @@
 import {
+  adoptiveDirection,
   compareSeniority,
   findBloodConnection,
   getSpouses,
   type BloodConnection,
   type FamilyGraph,
 } from '../graph';
+import { PARENT_SLOTS, SLOTS } from '../relations';
 import type { Kinship, KinPathStep, Member } from '../types';
 import {
   ancestorTerm,
@@ -32,6 +34,9 @@ export function resolveKinship(graph: FamilyGraph, egoId: string, targetId: stri
     ...forward,
     theyCallMe: backward.callThem,
     iCallMyself: toSelfPronoun(backward.callThem),
+    care: forward.care
+      ? { callThem: forward.care.callThem, theyCallMe: backward.care?.callThem ?? '' }
+      : undefined,
   };
 }
 
@@ -39,6 +44,10 @@ function resolveOneWay(graph: FamilyGraph, egoId: string, targetId: string): Kin
   const ego = graph.members.get(egoId);
   const target = graph.members.get(targetId);
   if (!ego || !target) return unknown('Không tìm thấy người này trong gia phả');
+
+  // Nuôi và đỡ đầu không tham gia tính danh xưng huyết thống, chỉ đi kèm để
+  // hiển thị. Tính sẵn ở đây rồi gắn vào mọi nhánh trả về bên dưới.
+  const care = careLink(ego, target);
 
   if (egoId === targetId) {
     return {
@@ -71,18 +80,19 @@ function resolveOneWay(graph: FamilyGraph, egoId: string, targetId: string): Kin
       ],
       explanation: `${target.fullName} là ${term} của bạn.`,
       warnings: [],
+      care: care ? { callThem: care, theyCallMe: '' } : undefined,
     };
   }
 
   const blood = findBloodConnection(graph, egoId, targetId);
-  if (blood) return fromBlood(graph, blood, ego, target);
+  if (blood) return withCare(fromBlood(graph, blood, ego, target), care);
 
   // Người đó là vợ/chồng của một người có huyết thống với mình → dâu / rể.
   for (const spouseId of getSpouses(graph, targetId)) {
     const conn = findBloodConnection(graph, egoId, spouseId);
     const relative = graph.members.get(spouseId);
     if (!conn || !relative) continue;
-    const via = fromBlood(graph, conn, ego, relative);
+    const via = withCare(fromBlood(graph, conn, ego, relative), care);
     // Vợ/chồng sau của bố mẹ mình là mẹ kế / bố dượng, không phải bố mẹ ruột —
     // nếu là ruột thì đã bắt được ở nhánh huyết thống phía trên rồi.
     const isStepParent = via.callThem === 'bố' || via.callThem === 'mẹ';
@@ -107,7 +117,7 @@ function resolveOneWay(graph: FamilyGraph, egoId: string, targetId: string): Kin
     const conn = findBloodConnection(graph, mySpouseId, targetId);
     const mySpouse = graph.members.get(mySpouseId);
     if (!conn || !mySpouse) continue;
-    const via = fromBlood(graph, conn, mySpouse, target);
+    const via = withCare(fromBlood(graph, conn, mySpouse, target), care);
     const suffix = mySpouse.gender === 'F' ? 'vợ' : 'chồng';
     const term = inLawTerm(via.callThem, suffix);
     return {
@@ -122,7 +132,46 @@ function resolveOneWay(graph: FamilyGraph, egoId: string, targetId: string): Kin
     };
   }
 
+  // Không có huyết thống lẫn hôn nhân, nhưng có nuôi/đỡ đầu thì đó là câu trả lời.
+  if (care) {
+    return {
+      callThem: care,
+      theyCallMe: UNKNOWN_TERM,
+      iCallMyself: UNKNOWN_TERM,
+      category: 'nuoi-duong',
+      side: null,
+      generationGap: 0,
+      commonAncestorId: null,
+      path: [
+        { memberId: egoId, label: 'Bạn' },
+        { memberId: targetId, label: care },
+      ],
+      explanation: `${target.fullName} là ${care} của bạn. Hai bên không cùng huyết thống.`,
+      warnings: [],
+      care: { callThem: care, theyCallMe: '' },
+    };
+  }
+
   return unknown('Chưa xác định được quan hệ. Có thể còn thiếu dữ liệu cha/mẹ ở một nhánh.');
+}
+
+/**
+ * Quan hệ ĐỠ ĐẦU khai báo trực tiếp giữa hai người.
+ * Quan hệ nuôi không nằm ở đây: nó đã được tính như huyết thống trong đồ thị,
+ * chỉ được gắn thêm chữ "nuôi" khi hai người là cha mẹ con trực tiếp.
+ */
+function careLink(ego: Member, target: Member): string | null {
+  for (const slot of PARENT_SLOTS) {
+    const info = SLOTS[slot];
+    if (info.kind !== 'god') continue;
+    if (ego[info.field] === target.id) return info.label.toLowerCase();
+    if (target[info.field] === ego.id) return info.childLabel;
+  }
+  return null;
+}
+
+function withCare(kin: Kinship, care: string | null): Kinship {
+  return care ? { ...kin, care: { callThem: care, theyCallMe: '' } } : kin;
 }
 
 function fromBlood(
@@ -137,6 +186,15 @@ function fromBlood(
   const isClose = Math.min(dEgo, dTarget) <= 1;
 
   let term: string;
+
+  // Cha mẹ con NUÔI trực tiếp: vẫn là bố/mẹ/con nhưng nói rõ là nuôi.
+  const nuoi = adoptiveDirection(ego, target);
+  if (nuoi === 'b-la-cha-me-nuoi' && dTarget === 0 && dEgo === 1) {
+    return keetQua(graph, conn, target, target.gender === 'M' ? 'bố nuôi' : 'mẹ nuôi', []);
+  }
+  if (nuoi === 'b-la-con-nuoi' && dEgo === 0 && dTarget === 1) {
+    return keetQua(graph, conn, target, 'con nuôi', []);
+  }
 
   if (dTarget === 0) {
     term = ancestorTerm(dEgo, target.gender, side);
@@ -170,6 +228,19 @@ function fromBlood(
     if (!isClose) term = `${term} họ`;
   }
 
+  return keetQua(graph, conn, target, term, warnings, side, gap);
+}
+
+/** Gói kết quả huyết thống về một dạng chung. */
+function keetQua(
+  graph: FamilyGraph,
+  conn: BloodConnection,
+  target: Member,
+  term: string,
+  warnings: string[],
+  side: BloodConnection['side'] = conn.side,
+  gap = conn.dEgo - conn.dTarget,
+): Kinship {
   return {
     callThem: term,
     theyCallMe: UNKNOWN_TERM,

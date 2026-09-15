@@ -1,18 +1,16 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { checkCanDelete } from '../../domain/edit';
 import type { FamilyGraph } from '../../domain/graph';
 import { resolveKinship } from '../../domain/kinship';
-import { readRelations } from '../../domain/relations';
+import { SLOTS, readRelations, type ParentSlot } from '../../domain/relations';
 import type { Member, Note } from '../../domain/types';
 import { formatVnDate, lifespan } from '../../lib/text';
 import { Avatar } from '../ui/Avatar';
 
 export type RelationAction =
-  | { kind: 'pick-father'; memberId: string }
-  | { kind: 'pick-mother'; memberId: string }
+  | { kind: 'pick-parent'; memberId: string; slot: ParentSlot }
+  | { kind: 'clear-parent'; memberId: string; slot: ParentSlot }
   | { kind: 'pick-spouse'; memberId: string }
-  | { kind: 'clear-father'; memberId: string }
-  | { kind: 'clear-mother'; memberId: string }
   | { kind: 'clear-spouse'; memberId: string; marriageId: string };
 
 interface Props {
@@ -53,6 +51,16 @@ export function PersonDetail({
   const rel = readRelations(graph, member.id);
   // Giu rieng ra de TypeScript khong mat thu hep kieu ben trong ham mui ten.
   const spouseLink = rel.spouse;
+  const [hienThemQuanHe, setHienThemQuanHe] = useState(false);
+  const batBuoc = useMemo(
+    () => rel.parents.filter((p) => SLOTS[p.slot].kind === 'blood'),
+    [rel.parents],
+  );
+  const tuyChon = useMemo(
+    () => rel.parents.filter((p) => SLOTS[p.slot].kind !== 'blood'),
+    [rel.parents],
+  );
+  const coQuanHeNuoi = tuyChon.some((p) => p.person);
   const deleteCheck = checkCanDelete(graph, member.id, notes.length);
 
   return (
@@ -94,6 +102,12 @@ export function PersonDetail({
                 {kin.side === 'chong' && 'Họ hàng bên chồng.'}
               </p>
             )}
+            {kin.care && (
+              <p className="kin__line kin__care">
+                Ngoài ra, {member.fullName} là <strong>{kin.care.callThem}</strong> của bạn
+                {kin.care.theyCallMe ? `, bạn là ${kin.care.theyCallMe} của họ` : ''}.
+              </p>
+            )}
             {kin.warnings.map((w) => (
               <p className="alert alert--note" key={w}>
                 {w}
@@ -117,28 +131,20 @@ export function PersonDetail({
           <section className="detail__section">
             <h3 className="detail__section-title">Quan hệ trực tiếp</h3>
             <div className="relations">
-              <RelationRow
-                label="Bố"
-                person={rel.father}
-                onChoose={() => onEditRelation({ kind: 'pick-father', memberId: member.id })}
-                onClear={
-                  rel.father
-                    ? () => onEditRelation({ kind: 'clear-father', memberId: member.id })
-                    : undefined
-                }
-                onOpen={onSelect}
-              />
-              <RelationRow
-                label="Mẹ"
-                person={rel.mother}
-                onChoose={() => onEditRelation({ kind: 'pick-mother', memberId: member.id })}
-                onClear={
-                  rel.mother
-                    ? () => onEditRelation({ kind: 'clear-mother', memberId: member.id })
-                    : undefined
-                }
-                onOpen={onSelect}
-              />
+              {batBuoc.map(({ slot, person }) => (
+                <RelationRow
+                  key={slot}
+                  label={SLOTS[slot].label}
+                  person={person}
+                  onChoose={() => onEditRelation({ kind: 'pick-parent', memberId: member.id, slot })}
+                  onClear={
+                    person
+                      ? () => onEditRelation({ kind: 'clear-parent', memberId: member.id, slot })
+                      : undefined
+                  }
+                  onOpen={onSelect}
+                />
+              ))}
               <RelationRow
                 label="Vợ / chồng"
                 person={spouseLink?.member}
@@ -155,12 +161,46 @@ export function PersonDetail({
                 }
                 onOpen={onSelect}
               />
+
+              {(hienThemQuanHe || coQuanHeNuoi) &&
+                tuyChon.map(({ slot, person }) => (
+                  <RelationRow
+                    key={slot}
+                    label={SLOTS[slot].label}
+                    person={person}
+                    onChoose={() =>
+                      onEditRelation({ kind: 'pick-parent', memberId: member.id, slot })
+                    }
+                    onClear={
+                      person
+                        ? () => onEditRelation({ kind: 'clear-parent', memberId: member.id, slot })
+                        : undefined
+                    }
+                    onOpen={onSelect}
+                  />
+                ))}
             </div>
+
+            {!hienThemQuanHe && !coQuanHeNuoi && (
+              <button className="linkish" type="button" onClick={() => setHienThemQuanHe(true)}>
+                + Thêm cha mẹ nuôi hoặc đỡ đầu
+              </button>
+            )}
+
             {rel.children.length > 0 && (
               <p className="relations__children">
                 <strong>Con ({rel.children.length}):</strong>{' '}
                 {rel.children.map((c) => c.fullName).join(', ')}. Sửa cha mẹ của từng người ngay
                 trong thẻ của họ.
+              </p>
+            )}
+            {rel.otherChildren.length > 0 && (
+              <p className="relations__children">
+                <strong>Nhận nuôi / đỡ đầu:</strong>{' '}
+                {rel.otherChildren
+                  .map((c) => `${c.person.fullName} (${c.kind === 'adoptive' ? 'con nuôi' : 'con đỡ đầu'})`)
+                  .join(', ')}
+                .
               </p>
             )}
           </section>

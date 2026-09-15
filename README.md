@@ -68,6 +68,8 @@ Engine cài đặt chuẩn miền Bắc. Vài điểm đáng chú ý:
 | Em trai của ông nội | ông trẻ |
 | Vợ của chú / vợ của cậu | thím / mợ |
 | Vợ hai của bố | mẹ kế (không phải "mẹ") |
+| Bố nuôi / mẹ nuôi | **tính như huyết thống** — anh của bố nuôi vẫn là bác |
+| Bố đỡ đầu / mẹ đỡ đầu | **không tính huyết thống** — chỉ hiện kèm bên cạnh |
 
 Anh chị em **họ** xét theo vai vế của bố mẹ chứ không theo tuổi. Khi tuổi đi ngược vai,
 ứng dụng vẫn trả đúng vai và hiện một dòng giải thích để người xem không tưởng là lỗi.
@@ -99,6 +101,23 @@ pnpm test           # chạy toàn bộ test
 pnpm test:coverage  # kiểm tra độ phủ
 pnpm build          # build production
 ```
+
+## Quan hệ giữa hai người
+
+Ngoài cha mẹ ruột, mỗi người ghi được tối đa một bố nuôi, một mẹ nuôi, một bố đỡ đầu
+và một mẹ đỡ đầu. Hai loại này khác nhau ở chỗ:
+
+- **Nuôi** được tính như huyết thống khi lần ra quan hệ: vợ của bố nuôi là mẹ nuôi, con
+  của bố nuôi là anh chị em. Riêng quan hệ trực tiếp thì nói rõ "bố nuôi", "con nuôi".
+- **Đỡ đầu** không tính huyết thống. Danh xưng giữ nguyên theo họ hàng sẵn có, quan hệ đỡ
+  đầu chỉ hiện thêm một dòng bên cạnh. Nếu hai người không có quan hệ nào khác thì nó
+  thành câu trả lời chính.
+
+Mỗi người chỉ giữ **một dây hôn phối** tại một thời điểm, theo tục Việt Nam.
+
+Sửa và gỡ quan hệ ngay trong thẻ của từng người. Khi chọn người, ai không hợp lệ vẫn hiện
+trong danh sách nhưng bị khoá kèm lý do — chặn đặt con cháu làm cha mẹ (sẽ tạo vòng lặp
+trong cây), đặt nữ làm bố, hay cho hai người cùng huyết thống trực hệ làm vợ chồng.
 
 ## Xoá an toàn
 
