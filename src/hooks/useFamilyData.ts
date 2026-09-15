@@ -44,12 +44,33 @@ export function useFamilyData(ready: boolean) {
     return { members: s.members, marriages: s.marriages, notes: s.notes, myMemberId: '' };
   }, []);
 
-  const apply = useCallback((next: FamilySnapshot) => {
+  /**
+   * Biến đổi trạng thái hiện tại, KHÔNG ghi đè bằng một ảnh chụp cũ.
+   *
+   * Trước đây mỗi thao tác chụp ảnh trạng thái rồi ghi đè toàn bộ. Hai thao tác
+   * chạy sát nhau thì cái sau chụp phải ảnh cũ (React chưa kịp render) và hồi
+   * sinh lại thứ cái trước vừa xoá. Truyền hàm biến đổi vào setState thì React
+   * luôn đưa cho ta trạng thái mới nhất, nên các thao tác chồng lên nhau an toàn.
+   */
+  const apply = useCallback((change: (s: FamilySnapshot) => FamilySnapshot) => {
+    setState((s) => {
+      const next = change({
+        members: s.members,
+        marriages: s.marriages,
+        notes: s.notes,
+        myMemberId: '',
+      });
+      return { ...s, members: next.members, marriages: next.marriages, notes: next.notes };
+    });
+  }, []);
+
+  /** Trả màn hình về đúng ảnh chụp trước thao tác, dùng khi ghi hỏng. */
+  const restore = useCallback((snap: FamilySnapshot) => {
     setState((s) => ({
       ...s,
-      members: next.members,
-      marriages: next.marriages,
-      notes: next.notes,
+      members: snap.members,
+      marriages: snap.marriages,
+      notes: snap.notes,
     }));
   }, []);
 
@@ -93,24 +114,24 @@ export function useFamilyData(ready: boolean) {
       try {
         return await work();
       } catch (err) {
-        apply(before);
+        restore(before);
         throw err;
       } finally {
         setState((s) => ({ ...s, saving: Math.max(0, s.saving - 1) }));
       }
     },
-    [apply],
+    [restore],
   );
 
   const addMember = useCallback(
     async (input: api.NewMemberInput) => {
       const before = snapshot();
       const draft: Member = { ...input, id: opt.tempId() };
-      apply(opt.addMember(before, draft, input.spouseId));
+      apply((cur) => opt.addMember(cur, draft, input.spouseId));
 
       return send(before, async () => {
         const realId = await api.addMember(input);
-        apply(opt.commitId(snapshot(), draft.id, realId));
+        apply((cur) => opt.commitId(cur, draft.id, realId));
         return realId;
       });
     },
@@ -120,7 +141,7 @@ export function useFamilyData(ready: boolean) {
   const updateMember = useCallback(
     async (id: string, patch: Partial<Member>) => {
       const before = snapshot();
-      apply(opt.updateMember(before, id, patch));
+      apply((cur) => opt.updateMember(cur, id, patch));
       await send(before, () => api.updateMember(id, patch));
     },
     [snapshot, apply, send],
@@ -129,7 +150,7 @@ export function useFamilyData(ready: boolean) {
   const deleteMember = useCallback(
     async (id: string) => {
       const before = snapshot();
-      apply(opt.removeMember(before, id));
+      apply((cur) => opt.removeMember(cur, id));
       await send(before, () => api.deleteMember(id));
     },
     [snapshot, apply, send],
@@ -139,14 +160,14 @@ export function useFamilyData(ready: boolean) {
   const linkSpouses = useCallback(
     async (a: Pick<Member, 'id' | 'gender'>, b: Pick<Member, 'id' | 'gender'>) => {
       const before = snapshot();
-      if (findMarriage(before.marriages, a.id, b.id)) return;
+      if (findMarriage(stateRef.current.marriages, a.id, b.id)) return;
       const { husbandId, wifeId } = orderCouple(a, b);
       const draft: Marriage = { id: opt.tempId('tmpw'), husbandId, wifeId, status: 'married' };
-      apply(opt.addMarriage(before, draft));
+      apply((cur) => opt.addMarriage(cur, draft));
 
       await send(before, async () => {
         const realId = await api.addMarriage(husbandId, wifeId);
-        apply(opt.commitId(snapshot(), draft.id, realId));
+        apply((cur) => opt.commitId(cur, draft.id, realId));
       });
     },
     [snapshot, apply, send],
@@ -155,7 +176,7 @@ export function useFamilyData(ready: boolean) {
   const unlinkMarriage = useCallback(
     async (id: string) => {
       const before = snapshot();
-      apply(opt.removeMarriage(before, id));
+      apply((cur) => opt.removeMarriage(cur, id));
       await send(before, () => api.deleteMarriage(id));
     },
     [snapshot, apply, send],
@@ -171,6 +192,12 @@ export function useFamilyData(ready: boolean) {
     [unlinkMarriage],
   );
 
+  /** Kiểm tra đã nối chưa, đọc từ trạng thái mới nhất. */
+  const alreadyLinked = useCallback(
+    (a: string, b: string) => Boolean(findMarriage(stateRef.current.marriages, a, b)),
+    [],
+  );
+
   const addNote = useCallback(
     async (memberId: string, content: string) => {
       const before = snapshot();
@@ -182,11 +209,11 @@ export function useFamilyData(ready: boolean) {
         createdAt: new Date().toISOString(),
         mine: true,
       };
-      apply(opt.addNote(before, draft));
+      apply((cur) => opt.addNote(cur, draft));
 
       await send(before, async () => {
         const saved = await api.addNote(memberId, content);
-        apply(opt.commitId(snapshot(), draft.id, saved.id));
+        apply((cur) => opt.commitId(cur, draft.id, saved.id));
       });
     },
     [snapshot, apply, send],
@@ -195,7 +222,7 @@ export function useFamilyData(ready: boolean) {
   const deleteNote = useCallback(
     async (id: string) => {
       const before = snapshot();
-      apply(opt.removeNote(before, id));
+      apply((cur) => opt.removeNote(cur, id));
       await send(before, () => api.deleteNote(id));
     },
     [snapshot, apply, send],
@@ -237,6 +264,7 @@ export function useFamilyData(ready: boolean) {
     linkSpouses,
     unlinkMarriage,
     unlinkAllSpouses,
+    alreadyLinked,
     addNote,
     deleteNote,
     refresh,
