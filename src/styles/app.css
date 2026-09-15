@@ -227,11 +227,23 @@
   /* minmax(0,1fr) chứ không phải 1fr: cây gia phả bên trong rộng theo max-content,
      nếu để cột tự co giãn thì nó kéo cả thanh trên tràn ra ngoài màn hình. */
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
 }
+
+/*
+ * Đặt hàng tường minh cho từng phần.
+ *
+ * Banner "dữ liệu mẫu" chỉ có ở chế độ demo. Nếu để lưới tự xếp chỗ thì bản thật
+ * không có banner sẽ đẩy cây và bảng thông tin lên hàng 2 (cao theo nội dung)
+ * thay vì hàng 3 (lấp đầy màn hình) — bảng thông tin dài ra và thanh nút Sửa/Xoá
+ * bị đẩy xuống dưới đáy màn hình.
+ */
+.topbar { grid-row: 1; }
+.demo-banner { grid-row: 2; }
+.workspace { grid-row: 3; }
 
 .topbar {
   min-width: 0;
@@ -629,6 +641,8 @@ button.lineage__name:active { color: var(--son); }
   .shell--with-detail { grid-template-columns: minmax(0, 1fr) minmax(21rem, 25rem); }
   .shell--with-detail .topbar,
   .shell--with-detail .demo-banner { grid-column: 1 / -1; }
+  .shell--with-detail .workspace { grid-row: 3; grid-column: 1; }
+  .shell--with-detail .detail { grid-row: 3; grid-column: 2; }
 
   .detail {
     position: static;
@@ -829,7 +843,29 @@ button.lineage__name:active { color: var(--son); }
   min-width: 4.5rem;
   flex-shrink: 0;
 }
-.relation-row__name { flex: 1; min-width: 0; font-size: var(--text-sm); font-weight: 500; }
+.relation-row__name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  /* Đây là thẻ button nên phải gỡ hết kiểu mặc định, nếu không nó hiện ra như
+     một cái nút xám có viền giữa dòng chữ. */
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  color: var(--ink);
+}
+button.relation-row__name {
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+}
+button.relation-row__name:active { color: var(--son); }
+
+@media (hover: hover) {
+  button.relation-row__name:hover { color: var(--son); text-decoration-color: var(--son); }
+}
 .relation-row__name--empty { color: var(--ink-faint); font-style: italic; font-weight: 400; }
 .relation-row__actions { display: flex; gap: var(--space-1); flex-shrink: 0; }
 .relation-row__btn {
