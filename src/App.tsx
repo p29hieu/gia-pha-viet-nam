@@ -510,7 +510,7 @@ export default function App() {
               +
             </button>
           )}
-          {session.isOwner && !IS_DEMO && (
+          {session.canManage && !IS_DEMO && (
             <button
               className="btn btn--icon-lg"
               type="button"
@@ -573,7 +573,7 @@ export default function App() {
           notes={data.notesByMember.get(selected.id) ?? []}
           canEdit={session.canEdit}
           canComment={session.canComment}
-          isAdmin={session.isOwner}
+          isAdmin={session.canManage}
           onSelect={setSelectedId}
           onAddNote={handleAddNote}
           onDeleteNote={handleDeleteNote}

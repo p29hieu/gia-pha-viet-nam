@@ -20,6 +20,8 @@ export default defineConfig(({ command }) => ({
     chunkSizeWarningLimit: 800,
   },
   test: {
+    // Test luật Firestore chạy riêng bằng `pnpm test:rules` vì cần emulator.
+    exclude: ['node_modules/**', 'dist/**', 'firebase/**'],
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test-setup.ts'],

@@ -6,8 +6,16 @@ rules_version = '2';
 // Cau hinh Firebase phia client la cong khai, nen TOAN BO bao mat nam o day.
 // Nguyen tac: khong ai doc duoc gi neu chua la thanh vien cua dong ho do.
 //
-// Quy trinh tham gia: dang nhap Google -> tao yeu cau vao ho -> chu ho duyet
-// -> chu ho tao ban ghi thanh vien. Nguoi chua duoc duyet khong doc duoc gi.
+// Ba muc quyen cap duoc cho nguoi dong gop:
+//   viewer    - xem va tim kiem
+//   commenter - them ghi chu
+//   admin     - toan quyen: sua nguoi, sua quan he, moi va duyet nguoi vao
+//
+// 'owner' la nguoi lap cay, khong phai muc cap duoc. Khac admin dung hai diem,
+// ca hai deu de tranh khoa chet dong ho: khong ai ha duoc quyen chu, va khong
+// ai dung duoc vao ban ghi thanh vien cua chinh chu.
+//
+// Bang nay phai khop tung dong voi src/domain/perm.ts.
 // =============================================================================
 
 service cloud.firestore {
@@ -29,14 +37,24 @@ service cloud.firestore {
       return get(membershipPath(clanId)).data.role;
     }
 
-    function canEdit(clanId) {
-      return isMember(clanId) && myRole(clanId) in ['owner', 'editor'];
+    function ownerUid(clanId) {
+      return get(/databases/$(database)/documents/clans/$(clanId)).data.ownerUid;
     }
 
-    // Muc 'binh luan': ghi chu duoc nhung khong sua duoc thong tin nguoi.
-    // Bang nay phai khop voi src/domain/perm.ts.
+    // 'editor' la ten cu cua 'admin', con sot lai trong du lieu tu truoc khi
+    // doi ten muc. Van chap nhan de khong phai sua du lieu; phia client
+    // normaliseRole() quy no ve 'admin' khi doc.
+    function canEdit(clanId) {
+      return isMember(clanId) && myRole(clanId) in ['owner', 'admin', 'editor'];
+    }
+
     function canComment(clanId) {
-      return isMember(clanId) && myRole(clanId) in ['owner', 'editor', 'commenter'];
+      return isMember(clanId) && myRole(clanId) in ['owner', 'admin', 'editor', 'commenter'];
+    }
+
+    // Moi nguoi, duyet nguoi xin vao, doi muc quyen cua nguoi khac.
+    function canManage(clanId) {
+      return isMember(clanId) && myRole(clanId) in ['owner', 'admin', 'editor'];
     }
 
     function isOwner(clanId) {
@@ -54,7 +72,7 @@ service cloud.firestore {
     // collection group. Ban ghi membership vi the phai co truong uid, va luat
     // ghi ben duoi ep truong do bang chinh id document.
     match /{path=**}/memberships/{mid} {
-      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
     // ---------------------------------------------------------------- dong ho
@@ -68,9 +86,11 @@ service cloud.firestore {
       // Khong cho liet ke toan bo dong ho tren he thong.
       allow list: if false;
 
-      // Ai dang nhap cung tao duoc dong ho cua minh, nhung phai tu nhan lam chu.
+      // Ai dang nhap cung lap duoc cay gia pha rieng, nhung phai tu nhan lam chu.
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
-      allow update: if isOwner(clanId) && request.resource.data.ownerUid == resource.data.ownerUid;
+      // Doi ten cay thi admin lam duoc; sang tay quyen chu thi khong.
+      allow update: if canManage(clanId)
+        && request.resource.data.ownerUid == resource.data.ownerUid;
       allow delete: if false;
 
       // ------------------------------------------------------------ thanh vien
@@ -78,8 +98,9 @@ service cloud.firestore {
       match /memberships/{uid} {
         allow read: if isMember(clanId);
 
-        // Nguoi vua tao dong ho tu ghi minh lam chu. Ngoai ra chi chu ho moi
-        // them duoc nguoi khac - day la chot chan duy nhat de vao duoc du lieu.
+        // Hai duong vao: nguoi vua lap cay tu ghi minh lam chu, hoac admin them
+        // nguoi khac. Day la chot chan duy nhat de vao duoc du lieu gia pha.
+        //
         // Truong uid phai bang chinh id document, neu khong luat collection
         // group o tren se tin vao mot gia tri bia.
         allow create: if signedIn()
@@ -87,24 +108,29 @@ service cloud.firestore {
           && (
             (request.auth.uid == uid
               && request.resource.data.role == 'owner'
-              && get(/databases/$(database)/documents/clans/$(clanId)).data.ownerUid == request.auth.uid)
-            || isOwner(clanId)
+              && ownerUid(clanId) == request.auth.uid)
+            ||
+            // Admin them nguoi, nhung khong phong duoc ai lam chu ho.
+            (canManage(clanId) && request.resource.data.role != 'owner')
           );
-        allow update: if isOwner(clanId)
+
+        // Ban ghi cua chu ho bat kha xam pham — ke ca chinh chu cung khong tu
+        // ha quyen minh, vi ha xong la dong ho khong con ai mo khoa duoc.
+        allow update: if canManage(clanId)
           && request.resource.data.uid == uid
-          // Chu ho khong tu ha quyen minh, tranh khoa chet dong ho.
-          && !(uid == request.auth.uid && request.resource.data.role != 'owner');
-        allow delete: if isOwner(clanId)
-          && !(uid == request.auth.uid);
+          && uid != ownerUid(clanId)
+          && request.resource.data.role != 'owner';
+
+        allow delete: if canManage(clanId) && uid != ownerUid(clanId);
       }
 
       // --------------------------------------------------------- xin vao dong ho
 
       match /joinRequests/{uid} {
-        // Nguoi xin chi thay yeu cau cua chinh minh; chu ho thay tat ca.
-        allow read: if signedIn() && (request.auth.uid == uid || isOwner(clanId));
+        // Nguoi xin chi thay yeu cau cua chinh minh; admin thay tat ca.
+        allow read: if signedIn() && (request.auth.uid == uid || canManage(clanId));
         allow create: if signedIn() && request.auth.uid == uid;
-        allow delete: if signedIn() && (request.auth.uid == uid || isOwner(clanId));
+        allow delete: if signedIn() && (request.auth.uid == uid || canManage(clanId));
         allow update: if false;
       }
 
@@ -126,7 +152,7 @@ service cloud.firestore {
         allow create: if canComment(clanId) && request.resource.data.authorUid == request.auth.uid;
         allow update: if false;
         allow delete: if isMember(clanId)
-          && (resource.data.authorUid == request.auth.uid || isOwner(clanId));
+          && (resource.data.authorUid == request.auth.uid || canManage(clanId));
       }
     }
 

@@ -13,17 +13,18 @@ import {
 } from 'firebase/firestore';
 import type { Marriage, Member, Note } from '../domain/types';
 import type { Account } from './auth';
+import { normaliseRole } from '../domain/perm';
 import { requireDb } from './firebase';
 
 /**
- * Mức quyền, từ thấp lên cao.
+ * Mức quyền, từ thấp lên cao. Chi tiết và bảng đối chiếu ở `src/domain/perm.ts`.
  *
- * viewer    — chỉ đọc
- * commenter — đọc và ghi chú
- * editor    — sửa người và quan hệ
- * owner     — thêm quyền mời và duyệt người vào
+ * viewer    — xem và tìm kiếm
+ * commenter — thêm ghi chú
+ * admin     — toàn quyền: sửa người, sửa quan hệ, mời và duyệt người vào
+ * owner     — người lập cây, không ai hạ quyền được
  */
-export type Role = 'owner' | 'editor' | 'commenter' | 'viewer';
+export type Role = 'owner' | 'admin' | 'commenter' | 'viewer';
 
 export interface Membership {
   uid: string;
@@ -123,7 +124,7 @@ export async function listMyClans(uid: string): Promise<ClanSummary[]> {
         return {
           id: clanId,
           name: (info.data()?.name as string) ?? 'Gia phả dòng họ',
-          role: (data.role as Role) ?? 'viewer',
+          role: normaliseRole(data.role),
           memberId: (data.memberId as string) ?? '',
         };
       }),
@@ -153,7 +154,7 @@ export async function readAccess(clanId: string, account: Account): Promise<Acce
         clanName,
         membership: {
           uid: account.uid,
-          role: (d.role as Role) ?? 'viewer',
+          role: normaliseRole(d.role),
           displayName: (d.displayName as string) ?? account.displayName,
           email: (d.email as string) ?? account.email,
           photoURL: (d.photoURL as string) ?? account.photoURL,

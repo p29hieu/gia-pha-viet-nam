@@ -7,23 +7,24 @@ import {
   ROLE_ORDER,
   atLeast,
   isRole,
+  normaliseRole,
   permissionsOf,
 } from './perm';
 
 describe('thứ bậc mức quyền', () => {
   it('xếp từ thấp lên cao', () => {
-    expect([...ROLE_ORDER]).toEqual(['viewer', 'commenter', 'editor', 'owner']);
+    expect([...ROLE_ORDER]).toEqual(['viewer', 'commenter', 'admin', 'owner']);
   });
 
   it('vai cao có đủ tầm của vai thấp', () => {
     expect(atLeast('owner', 'viewer')).toBe(true);
-    expect(atLeast('editor', 'commenter')).toBe(true);
+    expect(atLeast('admin', 'commenter')).toBe(true);
   });
 
   it('vai thấp không với tới vai cao', () => {
     expect(atLeast('viewer', 'commenter')).toBe(false);
-    expect(atLeast('commenter', 'editor')).toBe(false);
-    expect(atLeast('editor', 'owner')).toBe(false);
+    expect(atLeast('commenter', 'admin')).toBe(false);
+    expect(atLeast('admin', 'owner')).toBe(false);
   });
 
   it('vai bằng chính nó thì đủ', () => {
@@ -32,11 +33,12 @@ describe('thứ bậc mức quyền', () => {
 });
 
 describe('quyền của từng mức', () => {
-  it('chỉ xem: đọc được, không ghi chú, không sửa', () => {
+  it('chỉ xem: xem và tìm kiếm, không ghi chú, không sửa', () => {
     expect(permissionsOf('viewer')).toEqual({
       canView: true,
       canComment: false,
       canEdit: false,
+      canManage: false,
       isOwner: false,
     });
   });
@@ -46,24 +48,27 @@ describe('quyền của từng mức', () => {
       canView: true,
       canComment: true,
       canEdit: false,
+      canManage: false,
       isOwner: false,
     });
   });
 
-  it('sửa: làm được mọi thứ trừ việc của chủ họ', () => {
-    expect(permissionsOf('editor')).toEqual({
+  it('toàn quyền: sửa được người và quản được người vào', () => {
+    expect(permissionsOf('admin')).toEqual({
       canView: true,
       canComment: true,
       canEdit: true,
+      canManage: true,
       isOwner: false,
     });
   });
 
-  it('chủ họ: toàn quyền', () => {
+  it('chủ họ: như toàn quyền, thêm chỗ đứng không ai hạ được', () => {
     expect(permissionsOf('owner')).toEqual({
       canView: true,
       canComment: true,
       canEdit: true,
+      canManage: true,
       isOwner: true,
     });
   });
@@ -79,21 +84,32 @@ describe('cấp quyền cho người khác', () => {
   });
 
   it('cấp được đúng ba mức anh Hiếu yêu cầu', () => {
-    expect([...GRANTABLE_ROLES]).toEqual(['viewer', 'commenter', 'editor']);
+    expect([...GRANTABLE_ROLES]).toEqual(['viewer', 'commenter', 'admin']);
   });
 });
 
-describe('nhận ra giá trị hợp lệ', () => {
+describe('đọc giá trị từ Firestore', () => {
   it('nhận đúng bốn mức', () => {
     ROLE_ORDER.forEach((r) => expect(isRole(r)).toBe(true));
   });
 
-  it('từ chối giá trị lạ đọc từ Firestore', () => {
-    expect(isRole('admin')).toBe(false);
-    expect(isRole('')).toBe(false);
+  it('quy giá trị cũ "editor" về "admin", khỏi phải sửa dữ liệu', () => {
+    expect(normaliseRole('editor')).toBe('admin');
+  });
+
+  it('giá trị lạ hoặc thiếu thì cho mức THẤP nhất, không phải mức cao nhất', () => {
+    expect(normaliseRole('superuser')).toBe('viewer');
+    expect(normaliseRole('')).toBe('viewer');
+    expect(normaliseRole(undefined)).toBe('viewer');
+    expect(normaliseRole(null)).toBe('viewer');
+    expect(normaliseRole(3)).toBe('viewer');
+    expect(normaliseRole({ role: 'owner' })).toBe('viewer');
+  });
+
+  it('từ chối giá trị cũ khi chỉ hỏi có phải mức hợp lệ không', () => {
+    expect(isRole('editor')).toBe(false);
+    expect(isRole('admin')).toBe(true);
     expect(isRole(undefined)).toBe(false);
-    expect(isRole(null)).toBe(false);
-    expect(isRole(3)).toBe(false);
   });
 });
 
