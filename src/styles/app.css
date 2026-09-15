@@ -191,7 +191,9 @@
   transition: background var(--duration) var(--ease), border-color var(--duration) var(--ease);
 }
 .clans__item:active { background: var(--paper-sunk); transform: scale(0.99); }
+.clans__who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .clans__name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.clans__id { font-size: var(--text-xs); color: var(--ink-faint); font-family: ui-monospace, 'SF Mono', monospace; overflow-wrap: anywhere; }
 .clans__role {
   flex-shrink: 0;
   font-size: var(--text-xs);

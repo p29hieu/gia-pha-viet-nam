@@ -83,7 +83,11 @@ export function ClanPicker({ account, clans, error, onRetry, onOpen, onCreate, o
             {clans.map((c) => (
               <li key={c.id}>
                 <button className="clans__item" type="button" onClick={() => onOpen(c.id)}>
-                  <span className="clans__name">{c.name}</span>
+                  <span className="clans__who">
+                    <span className="clans__name">{c.name}</span>
+                    {/* Hai cây có thể trùng tên; id là thứ nằm trong URL nên phân biệt được. */}
+                    <span className="clans__id">{c.id}</span>
+                  </span>
                   <span className="clans__role">{ROLE_LABEL[c.role]}</span>
                 </button>
               </li>
