@@ -9,12 +9,15 @@ if (!container) throw new Error('Không tìm thấy phần tử #root');
 // Cong cu chuyen du lieu mot lan, chi co khi chay may phat trien.
 if (import.meta.env.DEV) {
   void (async () => {
-    const [{ importBackup }, client] = await Promise.all([
+    const [{ importBackup }, { backfillUid }, client] = await Promise.all([
       import('./api/importBackup'),
+      import('./api/backfillUid'),
       import('./api/client'),
     ]);
-    (window as unknown as Record<string, unknown>).__giaphaImport = importBackup;
-    (window as unknown as Record<string, unknown>).__giaphaClient = client;
+    const w = window as unknown as Record<string, unknown>;
+    w.__giaphaImport = importBackup;
+    w.__giaphaBackfillUid = backfillUid;
+    w.__giaphaClient = client;
   })();
 }
 
