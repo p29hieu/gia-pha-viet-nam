@@ -18,6 +18,7 @@ import { ConfirmDialog } from './components/ui/ConfirmDialog';
 import { ToastStack } from './components/ui/Toast';
 import { checkCanDelete } from './domain/edit';
 import { getSpouses } from './domain/graph';
+import { marriagesOf, spouseIn } from './domain/marriage';
 import type { Member } from './domain/types';
 import { useFamilyData } from './hooks/useFamilyData';
 import { useSession } from './hooks/useSession';
@@ -59,6 +60,25 @@ export default function App() {
     setActionError('');
   }, []);
 
+  /**
+   * Nối hai người thành vợ chồng khi đã biết đủ cả cha lẫn mẹ.
+   * `newGender` dùng cho người vừa được tạo, vì họ chưa có trong đồ thị.
+   */
+  const linkParents = useCallback(
+    async (fatherId?: string, motherId?: string, newGender?: 'M' | 'F') => {
+      if (!fatherId || !motherId) return null;
+      const father = data.graph.members.get(fatherId) ?? { id: fatherId, gender: newGender ?? 'M' };
+      const mother = data.graph.members.get(motherId) ?? { id: motherId, gender: newGender ?? 'F' };
+      await data.linkSpouses(
+        { id: father.id, gender: father.gender },
+        { id: mother.id, gender: mother.gender },
+      );
+      const ten = (id: string) => data.graph.members.get(id)?.fullName ?? 'người mới';
+      return `${ten(fatherId)} và ${ten(motherId)}`;
+    },
+    [data],
+  );
+
   const handleCreate = useCallback(
     (relation: Relation, draft: MemberDraft) => {
       if (formMode?.kind !== 'create') return;
@@ -75,13 +95,21 @@ export default function App() {
               motherId: anchor.gender === 'F' ? anchor.id : spouse,
             });
           } else if (relation === 'vo-chong') {
+            // Anh Hiếu chọn: mỗi người chỉ giữ một liên kết vợ chồng tại một thời
+            // điểm, thêm người mới thì huỷ liên kết cũ đi.
+            const removed = await data.unlinkAllSpouses(anchor.id);
             await data.addMember({ ...draft, spouseId: anchor.id });
+            if (removed.length > 0) {
+              toast('info', `Đã huỷ liên kết vợ chồng cũ của ${anchor.fullName}`);
+            }
           } else if (relation === 'anh-chi-em') {
             await data.addMember({
               ...draft,
               fatherId: anchor.fatherId,
               motherId: anchor.motherId,
             });
+            // Anh chị em dùng chung cha mẹ — nhân dịp này nối cha mẹ nếu chưa nối.
+            await linkParents(anchor.fatherId, anchor.motherId);
           } else {
             const newId = await data.addMember(draft);
             if (newId) {
@@ -89,6 +117,16 @@ export default function App() {
                 anchor.id,
                 relation === 'bo' ? { fatherId: newId } : { motherId: newId },
               );
+              // Vừa biết đủ cả cha lẫn mẹ thì nối hai người thành cặp luôn.
+              // Truyền thẳng id chứ không đọc lại trạng thái React: thao tác ghi
+              // vừa xong chưa chắc đã kịp phản ánh vào trạng thái.
+              const otherParentId = relation === 'bo' ? anchor.motherId : anchor.fatherId;
+              const linked = await linkParents(
+                relation === 'bo' ? newId : otherParentId,
+                relation === 'bo' ? otherParentId : newId,
+                relation === 'bo' ? 'M' : 'F',
+              );
+              if (linked) toast('info', `Đã nối ${linked} thành vợ chồng`);
             }
           }
           toast('success', `Đã thêm ${draft.fullName} vào gia phả`);
@@ -97,7 +135,7 @@ export default function App() {
         }
       })();
     },
-    [data, formMode, closeForm, toast],
+    [data, formMode, closeForm, toast, linkParents],
   );
 
   const handleSave = useCallback(
@@ -353,6 +391,14 @@ export default function App() {
           myMemberId={myMemberId}
           selectedId={selectedId}
           onSelect={setSelectedId}
+          onQuickAdd={
+            session.canEdit
+              ? (id) => {
+                  const anchor = data.graph.members.get(id);
+                  if (anchor) setFormMode({ kind: 'create', anchor });
+                }
+              : undefined
+          }
         />
       </main>
 
@@ -383,6 +429,15 @@ export default function App() {
       {formMode && (
         <MemberForm
           mode={formMode}
+          currentSpouseName={
+            formMode.kind === 'create'
+              ? (() => {
+                  const w = marriagesOf(data.marriages, formMode.anchor.id)[0];
+                  if (!w) return undefined;
+                  return data.graph.members.get(spouseIn(w, formMode.anchor.id))?.fullName;
+                })()
+              : undefined
+          }
           busy={false}
           error=""
           onCancel={closeForm}

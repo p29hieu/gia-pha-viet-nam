@@ -142,6 +142,25 @@ export async function deleteMember(id: string): Promise<void> {
   await fs.deleteMember(id);
 }
 
+export async function addMarriage(husbandId: string, wifeId: string): Promise<string> {
+  if (IS_DEMO) {
+    const st = loadDemo();
+    const id = demoId('w_');
+    saveDemo({ ...st, marriages: [...st.marriages, { id, husbandId, wifeId, status: 'married' }] });
+    return id;
+  }
+  return fs.addMarriage(husbandId, wifeId);
+}
+
+export async function deleteMarriage(id: string): Promise<void> {
+  if (IS_DEMO) {
+    const st = loadDemo();
+    saveDemo({ ...st, marriages: st.marriages.filter((w) => w.id !== id) });
+    return;
+  }
+  await fs.deleteMarriage(id);
+}
+
 export async function addNote(memberId: string, content: string): Promise<Note> {
   if (IS_DEMO) {
     const note: Note = {

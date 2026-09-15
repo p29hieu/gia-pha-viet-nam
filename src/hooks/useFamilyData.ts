@@ -3,7 +3,8 @@ import * as api from '../api/client';
 import { buildGraph } from '../domain/graph';
 import * as opt from '../domain/optimistic';
 import type { FamilySnapshot } from '../domain/optimistic';
-import type { Member, Note } from '../domain/types';
+import { findMarriage, marriagesOf, orderCouple } from '../domain/marriage';
+import type { Marriage, Member, Note } from '../domain/types';
 
 interface State {
   status: 'idle' | 'loading' | 'ready' | 'error';
@@ -134,6 +135,42 @@ export function useFamilyData(ready: boolean) {
     [snapshot, apply, send],
   );
 
+  /** Nối hai người thành vợ chồng. Đã nối rồi thì thôi. */
+  const linkSpouses = useCallback(
+    async (a: Pick<Member, 'id' | 'gender'>, b: Pick<Member, 'id' | 'gender'>) => {
+      const before = snapshot();
+      if (findMarriage(before.marriages, a.id, b.id)) return;
+      const { husbandId, wifeId } = orderCouple(a, b);
+      const draft: Marriage = { id: opt.tempId('tmpw'), husbandId, wifeId, status: 'married' };
+      apply(opt.addMarriage(before, draft));
+
+      await send(before, async () => {
+        const realId = await api.addMarriage(husbandId, wifeId);
+        apply(opt.commitId(snapshot(), draft.id, realId));
+      });
+    },
+    [snapshot, apply, send],
+  );
+
+  const unlinkMarriage = useCallback(
+    async (id: string) => {
+      const before = snapshot();
+      apply(opt.removeMarriage(before, id));
+      await send(before, () => api.deleteMarriage(id));
+    },
+    [snapshot, apply, send],
+  );
+
+  /** Huỷ mọi liên kết vợ chồng hiện có của một người. Trả về những gì đã huỷ. */
+  const unlinkAllSpouses = useCallback(
+    async (memberId: string) => {
+      const existing = marriagesOf(stateRef.current.marriages, memberId);
+      for (const m of existing) await unlinkMarriage(m.id);
+      return existing;
+    },
+    [unlinkMarriage],
+  );
+
   const addNote = useCallback(
     async (memberId: string, content: string) => {
       const before = snapshot();
@@ -197,6 +234,9 @@ export function useFamilyData(ready: boolean) {
     addMember,
     updateMember,
     deleteMember,
+    linkSpouses,
+    unlinkMarriage,
+    unlinkAllSpouses,
     addNote,
     deleteNote,
     refresh,

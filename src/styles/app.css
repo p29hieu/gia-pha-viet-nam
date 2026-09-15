@@ -765,3 +765,44 @@ button.lineage__name:active { color: var(--son); }
 .requests__name { font-weight: 600; }
 .requests__meta { font-size: var(--text-xs); color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; }
 .requests__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+/* ---------------------------------------------------------------- thêm nhanh khi rê chuột */
+
+.person-card-wrap { position: relative; display: inline-flex; }
+
+/*
+ * Chỉ dựng nút này trên máy thực sự có chuột. Trên điện thoại nó vừa thừa
+ * (không rê chuột được) vừa dễ chạm nhầm, mà bảng thông tin đã có sẵn nút
+ * "+ Người thân" rồi.
+ */
+.person-card__add { display: none; }
+
+@media (hover: hover) and (pointer: fine) {
+  .person-card__add {
+    display: grid;
+    place-items: center;
+    position: absolute;
+    top: -9px;
+    right: -9px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--son-deep);
+    border-radius: 50%;
+    background: var(--son);
+    color: oklch(99% 0.01 60);
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1;
+    box-shadow: var(--shadow-card);
+    opacity: 0;
+    transform: scale(0.7);
+    transition: opacity var(--duration) var(--ease), transform var(--duration) var(--ease);
+  }
+  .person-card-wrap:hover .person-card__add,
+  .person-card__add:focus-visible {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .person-card__add:hover { background: var(--son-deep); }
+}

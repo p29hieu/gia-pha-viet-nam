@@ -18,6 +18,8 @@ export type FormMode = { kind: 'create'; anchor: Member } | { kind: 'edit'; memb
 
 interface Props {
   mode: FormMode;
+  /** Tên vợ/chồng hiện tại của người được chọn, để báo trước liên kết cũ sẽ bị huỷ. */
+  currentSpouseName?: string;
   busy: boolean;
   error: string;
   onCancel: () => void;
@@ -33,7 +35,7 @@ const RELATIONS: Array<{ value: Relation; label: string }> = [
   { value: 'me', label: 'Mẹ' },
 ];
 
-export function MemberForm({ mode, busy, error, onCancel, onCreate, onSave }: Props) {
+export function MemberForm({ mode, currentSpouseName, busy, error, onCancel, onCreate, onSave }: Props) {
   const editing = mode.kind === 'edit' ? mode.member : null;
 
   const [relation, setRelation] = useState<Relation>('con');
@@ -108,6 +110,13 @@ export function MemberForm({ mode, busy, error, onCancel, onCreate, onSave }: Pr
                 </label>
               ))}
             </fieldset>
+          )}
+
+          {!editing && relation === 'vo-chong' && currentSpouseName && (
+            <p className="alert alert--note">
+              {mode.kind === 'create' ? mode.anchor.fullName : ''} đang có liên kết vợ chồng với{' '}
+              <strong>{currentSpouseName}</strong>. Thêm người mới thì liên kết cũ sẽ bị huỷ.
+            </p>
           )}
 
           <label className="field">

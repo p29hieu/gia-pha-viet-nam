@@ -8,13 +8,14 @@ interface Props {
   myMemberId: string;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onQuickAdd?: (id: string) => void;
 }
 
 const ZOOM_STEP = 0.15;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 1.4;
 
-export function FamilyTree({ graph, myMemberId, selectedId, onSelect }: Props) {
+export function FamilyTree({ graph, myMemberId, selectedId, onSelect, onQuickAdd }: Props) {
   const layout = useMemo(() => computeLayout(graph), [graph]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState(1);
@@ -89,6 +90,7 @@ export function FamilyTree({ graph, myMemberId, selectedId, onSelect }: Props) {
                 collapsed={collapsed}
                 onToggle={toggle}
                 onSelect={onSelect}
+                onQuickAdd={onQuickAdd}
                 depth={0}
               />
             ))}
@@ -116,6 +118,7 @@ function TreeNode({
   collapsed,
   onToggle,
   onSelect,
+  onQuickAdd,
   depth,
 }: NodeProps) {
   const person = graph.members.get(id);
@@ -134,6 +137,7 @@ function TreeNode({
           myMemberId={myMemberId}
           selected={selectedId === id}
           onSelect={onSelect}
+          onQuickAdd={onQuickAdd}
         />
         {spouses.map((sid) => {
           const spouse = graph.members.get(sid);
@@ -147,6 +151,7 @@ function TreeNode({
                 myMemberId={myMemberId}
                 selected={selectedId === sid}
                 onSelect={onSelect}
+                onQuickAdd={onQuickAdd}
                 echo={layout.echoed.has(sid)}
               />
             </div>
@@ -178,6 +183,7 @@ function TreeNode({
               collapsed={collapsed}
               onToggle={onToggle}
               onSelect={onSelect}
+              onQuickAdd={onQuickAdd}
               depth={depth + 1}
             />
           ))}

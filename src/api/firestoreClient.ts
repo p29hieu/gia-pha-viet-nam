@@ -259,6 +259,24 @@ export async function deleteMember(id: string): Promise<void> {
   }
 }
 
+export async function addMarriage(husbandId: string, wifeId: string): Promise<string> {
+  try {
+    const ref = doc(marriagesRef());
+    await setDoc(ref, { husbandId, wifeId, status: 'married' });
+    return ref.id;
+  } catch (err) {
+    throw friendly(err, 'Khong noi duoc vo chong.');
+  }
+}
+
+export async function deleteMarriage(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(marriagesRef(), id));
+  } catch (err) {
+    throw friendly(err, 'Khong huy duoc lien ket vo chong.');
+  }
+}
+
 export async function addNote(
   account: Account,
   memberId: string,

@@ -71,6 +71,28 @@ describe('đổi id tạm thành id thật', () => {
     expect(next.members.find((m) => m.id === 'd')?.fatherId).toBe('m_real');
   });
 
+  it('đổi CHÍNH id của bản ghi hôn nhân, không chỉ hai đầu', () => {
+    const snap: FamilySnapshot = {
+      members: [],
+      marriages: [{ id: 'tmpw_1', husbandId: 'a', wifeId: 'b', status: 'married' }],
+      notes: [],
+      myMemberId: '',
+    };
+    const next = opt.commitId(snap, 'tmpw_1', 'w_real');
+    expect(next.marriages[0]?.id).toBe('w_real');
+    expect(next.marriages[0]?.husbandId).toBe('a');
+  });
+
+  it('đổi CHÍNH id của ghi chú', () => {
+    const snap: FamilySnapshot = {
+      members: [],
+      marriages: [],
+      notes: [{ id: 'tmpn_1', memberId: 'a', authorName: '', content: 'x', createdAt: '' }],
+      myMemberId: '',
+    };
+    expect(opt.commitId(snap, 'tmpn_1', 'n_real').notes[0]?.id).toBe('n_real');
+  });
+
   it('đổi cả trong hôn nhân, ghi chú và vị trí của mình', () => {
     const snap: FamilySnapshot = {
       members: [newMember('tmp_1')],

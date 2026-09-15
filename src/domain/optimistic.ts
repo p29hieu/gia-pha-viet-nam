@@ -43,22 +43,32 @@ export function addMember(
   return { ...snapshot, members: [...snapshot.members, member], marriages };
 }
 
-/** Máy chủ đã cấp id thật: thay id tạm ở mọi nơi đang trỏ tới nó. */
+/**
+ * Máy chủ đã cấp id thật: thay id tạm ở mọi nơi đang trỏ tới nó.
+ *
+ * Phải đổi cả CHÍNH id của bản ghi chứ không chỉ các tham chiếu. Quên chỗ này
+ * thì bản ghi giữ id tạm mãi, lệnh xoá gửi lên máy chủ trỏ vào document không
+ * tồn tại và im lặng không làm gì — người dùng tưởng đã xoá mà thực ra chưa.
+ */
 export function commitId(snapshot: FamilySnapshot, from: string, to: string): FamilySnapshot {
-  const swap = (id: string | undefined) => (id === from ? to : id);
+  const swap = <T extends string | undefined>(id: T): T => (id === from ? (to as T) : id);
+  const touches = (...ids: Array<string | undefined>) => ids.some((id) => id === from);
+
   return {
     ...snapshot,
     members: snapshot.members.map((m) =>
-      m.id === from || m.fatherId === from || m.motherId === from
-        ? { ...m, id: swap(m.id) ?? m.id, fatherId: swap(m.fatherId), motherId: swap(m.motherId) }
+      touches(m.id, m.fatherId, m.motherId)
+        ? { ...m, id: swap(m.id), fatherId: swap(m.fatherId), motherId: swap(m.motherId) }
         : m,
     ),
     marriages: snapshot.marriages.map((w) =>
-      w.husbandId === from || w.wifeId === from
-        ? { ...w, husbandId: swap(w.husbandId) ?? w.husbandId, wifeId: swap(w.wifeId) ?? w.wifeId }
+      touches(w.id, w.husbandId, w.wifeId)
+        ? { ...w, id: swap(w.id), husbandId: swap(w.husbandId), wifeId: swap(w.wifeId) }
         : w,
     ),
-    notes: snapshot.notes.map((n) => (n.memberId === from ? { ...n, memberId: to } : n)),
+    notes: snapshot.notes.map((n) =>
+      touches(n.id, n.memberId) ? { ...n, id: swap(n.id), memberId: swap(n.memberId) } : n,
+    ),
     myMemberId: snapshot.myMemberId === from ? to : snapshot.myMemberId,
   };
 }
@@ -82,6 +92,14 @@ export function removeMember(snapshot: FamilySnapshot, id: string): FamilySnapsh
     notes: snapshot.notes.filter((n) => n.memberId !== id),
     myMemberId: snapshot.myMemberId === id ? '' : snapshot.myMemberId,
   };
+}
+
+export function addMarriage(snapshot: FamilySnapshot, marriage: Marriage): FamilySnapshot {
+  return { ...snapshot, marriages: [...snapshot.marriages, marriage] };
+}
+
+export function removeMarriage(snapshot: FamilySnapshot, id: string): FamilySnapshot {
+  return { ...snapshot, marriages: snapshot.marriages.filter((w) => w.id !== id) };
 }
 
 export function addNote(snapshot: FamilySnapshot, note: Note): FamilySnapshot {
