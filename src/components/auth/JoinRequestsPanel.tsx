@@ -1,26 +1,28 @@
 import { useCallback, useEffect, useState } from 'react';
 import * as fs from '../../api/firestoreClient';
-import type { JoinRequest, Role } from '../../api/firestoreClient';
+import type { JoinRequest } from '../../api/firestoreClient';
+import { GRANTABLE_ROLES, ROLE_LABEL } from '../../domain/perm';
 
 interface Props {
+  clanId: string;
   onClose: () => void;
   onChanged: () => void;
 }
 
 /** Chủ họ duyệt người xin vào. Không duyệt thì họ không đọc được gì. */
-export function JoinRequestsPanel({ onClose, onChanged }: Props) {
+export function JoinRequestsPanel({ clanId, onClose, onChanged }: Props) {
   const [requests, setRequests] = useState<JoinRequest[] | null>(null);
   const [busyUid, setBusyUid] = useState('');
   const [error, setError] = useState('');
 
   const reload = useCallback(async () => {
     try {
-      setRequests(await fs.listJoinRequests());
+      setRequests(await fs.listJoinRequests(clanId));
     } catch (err) {
       setError((err as Error).message);
       setRequests([]);
     }
-  }, []);
+  }, [clanId]);
 
   useEffect(() => {
     void reload();
@@ -48,8 +50,9 @@ export function JoinRequestsPanel({ onClose, onChanged }: Props) {
         <header className="sheet__head">
           <h2 className="sheet__title">Yêu cầu vào dòng họ</h2>
           <p className="sheet__lead">
-            Duyệt ai thì người đó mới xem được gia phả. Quyền <strong>sửa</strong> cho phép thêm và
-            sửa người; quyền <strong>xem</strong> thì chỉ đọc.
+            Duyệt ai thì người đó mới xem được gia phả. <strong>Chỉ xem</strong> là đọc thôi;{' '}
+            <strong>bình luận</strong> thì ghi chú được; <strong>sửa</strong> thì thêm và sửa người
+            được.
           </p>
         </header>
 
@@ -70,22 +73,22 @@ export function JoinRequestsPanel({ onClose, onChanged }: Props) {
                   <span className="requests__meta">{r.email}</span>
                 </div>
                 <div className="requests__actions">
-                  {(['editor', 'viewer'] as Role[]).map((role) => (
+                  {GRANTABLE_ROLES.map((role) => (
                     <button
                       className="btn btn--small"
                       type="button"
                       key={role}
                       disabled={busyUid === r.uid}
-                      onClick={() => void act(r, () => fs.approveJoinRequest(r, role))}
+                      onClick={() => void act(r, () => fs.approveJoinRequest(clanId, r, role))}
                     >
-                      {role === 'editor' ? 'Cho sửa' : 'Chỉ xem'}
+                      {ROLE_LABEL[role]}
                     </button>
                   ))}
                   <button
                     className="btn btn--small btn--danger-ghost"
                     type="button"
                     disabled={busyUid === r.uid}
-                    onClick={() => void act(r, () => fs.rejectJoinRequest(r.uid))}
+                    onClick={() => void act(r, () => fs.rejectJoinRequest(clanId, r.uid))}
                   >
                     Từ chối
                   </button>

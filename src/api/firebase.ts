@@ -34,5 +34,10 @@ export function requireDb(): Firestore {
   return dbInstance;
 }
 
-/** Dòng họ mà bản dựng này phục vụ. Giai đoạn 1 chỉ có một dòng họ. */
-export const CLAN_ID = 'main';
+/**
+ * Cây gia phả mở sẵn khi URL chưa chỉ định và máy chưa nhớ cây nào.
+ *
+ * Để trống là bình thường — khi đó ứng dụng hỏi người dùng chọn cây. Biến này
+ * chỉ có ích cho bản dựng riêng phục vụ đúng một dòng họ.
+ */
+export const DEFAULT_CLAN_ID: string = import.meta.env.VITE_DEFAULT_CLAN_ID ?? '';

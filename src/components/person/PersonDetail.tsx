@@ -21,6 +21,8 @@ interface Props {
   myMemberId: string;
   notes: Note[];
   canEdit: boolean;
+  /** Mức 'bình luận': ghi chú được nhưng không sửa được thông tin người. */
+  canComment: boolean;
   isAdmin: boolean;
   onSelect: (id: string) => void;
   onAddNote: (memberId: string, content: string) => Promise<void>;
@@ -38,6 +40,7 @@ export function PersonDetail({
   myMemberId,
   notes,
   canEdit,
+  canComment,
   isAdmin,
   onSelect,
   onAddNote,
@@ -154,7 +157,9 @@ export function PersonDetail({
                   key={slot}
                   label={SLOTS[slot].label}
                   person={person}
-                  onChoose={() => onEditRelation({ kind: 'pick-parent', memberId: member.id, slot })}
+                  onChoose={() =>
+                    onEditRelation({ kind: 'pick-parent', memberId: member.id, slot })
+                  }
                   onClear={
                     person
                       ? () => onEditRelation({ kind: 'clear-parent', memberId: member.id, slot })
@@ -298,7 +303,7 @@ export function PersonDetail({
               </li>
             ))}
           </ul>
-          {canEdit && <NoteForm memberId={member.id} onAddNote={onAddNote} />}
+          {canComment && <NoteForm memberId={member.id} onAddNote={onAddNote} />}
         </section>
       </div>
 
@@ -352,7 +357,11 @@ function RelationRow({
           {person ? 'Đổi' : 'Chọn'}
         </button>
         {onClear && (
-          <button className="relation-row__btn relation-row__btn--danger" type="button" onClick={onClear}>
+          <button
+            className="relation-row__btn relation-row__btn--danger"
+            type="button"
+            onClick={onClear}
+          >
             Gỡ
           </button>
         )}

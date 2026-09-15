@@ -1,7 +1,7 @@
 import { collection, doc, getDocs, writeBatch } from 'firebase/firestore';
 import type { Marriage, Member, Note } from '../domain/types';
 import type { Account } from './auth';
-import { CLAN_ID, requireDb } from './firebase';
+import { requireDb } from './firebase';
 
 export interface Backup {
   members: Member[];
@@ -29,9 +29,12 @@ export interface ImportReport {
  */
 export async function importBackup(
   account: Account,
+  /** Bắt buộc nêu rõ: đây là công cụ ghi đè hàng loạt, mặc định ngầm là thứ gây ghi nhầm cây. */
+  clanId: string,
   backup: Backup,
   options: { dryRun?: boolean } = {},
 ): Promise<ImportReport> {
+  if (!clanId) throw new Error('Phải nêu rõ clanId muốn ghi vào');
   const dryRun = options.dryRun ?? false;
   const db = requireDb();
   const warnings: string[] = [];
@@ -56,9 +59,9 @@ export async function importBackup(
   };
 
   const now = new Date().toISOString();
-  const membersRef = collection(db, 'clans', CLAN_ID, 'members');
-  const marriagesRef = collection(db, 'clans', CLAN_ID, 'marriages');
-  const notesRef = collection(db, 'clans', CLAN_ID, 'notes');
+  const membersRef = collection(db, 'clans', clanId, 'members');
+  const marriagesRef = collection(db, 'clans', clanId, 'marriages');
+  const notesRef = collection(db, 'clans', clanId, 'notes');
 
   if (dryRun) {
     return {

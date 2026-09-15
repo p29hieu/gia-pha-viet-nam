@@ -172,6 +172,40 @@
 .login__hint { margin: var(--space-4) 0 0; font-size: var(--text-xs); color: var(--ink-faint); text-align: center; }
 .login__hint code { background: var(--paper-sunk); padding: 0.15rem 0.4rem; border-radius: var(--radius-sm); }
 
+/* ------------------------------------------------------------- chọn cây gia phả */
+
+.clans { list-style: none; margin: 0 0 var(--space-4); padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.clans__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration) var(--ease), border-color var(--duration) var(--ease);
+}
+.clans__item:active { background: var(--paper-sunk); transform: scale(0.99); }
+.clans__name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.clans__role {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+}
+.clans__cancel { display: block; margin: var(--space-3) auto 0; }
+
+@media (hover: hover) {
+  .clans__item:hover { background: var(--paper-sunk); border-color: var(--son); }
+}
+
 /* ---------------------------------------------------------------- splash / picker */
 
 .splash {

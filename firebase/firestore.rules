@@ -33,8 +33,28 @@ service cloud.firestore {
       return isMember(clanId) && myRole(clanId) in ['owner', 'editor'];
     }
 
+    // Muc 'binh luan': ghi chu duoc nhung khong sua duoc thong tin nguoi.
+    // Bang nay phai khop voi src/domain/perm.ts.
+    function canComment(clanId) {
+      return isMember(clanId) && myRole(clanId) in ['owner', 'editor', 'commenter'];
+    }
+
     function isOwner(clanId) {
       return isMember(clanId) && myRole(clanId) == 'owner';
+    }
+
+    // -------------------------------------------------- tim cac cay cua minh
+    //
+    // Khong liet ke duoc tu phia /clans (allow list: if false, neu khong la lo
+    // danh sach moi dong ho tren he thong). Nen hoi nguoc tu phia membership:
+    // moi nguoi chi doc duoc chinh ban ghi mang uid cua minh, o bat ky cay nao.
+    //
+    // Truy van phia client BUOC phai kem where('uid','==',uid) thi luat nay moi
+    // duyet duoc — do dung mau quyen so huu ma Firebase khuyen nghi cho
+    // collection group. Ban ghi membership vi the phai co truong uid, va luat
+    // ghi ben duoi ep truong do bang chinh id document.
+    match /{path=**}/memberships/{mid} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
     }
 
     // ---------------------------------------------------------------- dong ho
@@ -60,15 +80,22 @@ service cloud.firestore {
 
         // Nguoi vua tao dong ho tu ghi minh lam chu. Ngoai ra chi chu ho moi
         // them duoc nguoi khac - day la chot chan duy nhat de vao duoc du lieu.
-        allow create: if signedIn() && (
-          (request.auth.uid == uid
-            && request.resource.data.role == 'owner'
-            && get(/databases/$(database)/documents/clans/$(clanId)).data.ownerUid == request.auth.uid)
-          || isOwner(clanId)
-        );
-        allow update, delete: if isOwner(clanId)
+        // Truong uid phai bang chinh id document, neu khong luat collection
+        // group o tren se tin vao mot gia tri bia.
+        allow create: if signedIn()
+          && request.resource.data.uid == uid
+          && (
+            (request.auth.uid == uid
+              && request.resource.data.role == 'owner'
+              && get(/databases/$(database)/documents/clans/$(clanId)).data.ownerUid == request.auth.uid)
+            || isOwner(clanId)
+          );
+        allow update: if isOwner(clanId)
+          && request.resource.data.uid == uid
           // Chu ho khong tu ha quyen minh, tranh khoa chet dong ho.
           && !(uid == request.auth.uid && request.resource.data.role != 'owner');
+        allow delete: if isOwner(clanId)
+          && !(uid == request.auth.uid);
       }
 
       // --------------------------------------------------------- xin vao dong ho
@@ -96,7 +123,7 @@ service cloud.firestore {
       match /notes/{noteId} {
         allow read: if isMember(clanId);
         // Khong cho mao danh nguoi khac khi ghi chu.
-        allow create: if canEdit(clanId) && request.resource.data.authorUid == request.auth.uid;
+        allow create: if canComment(clanId) && request.resource.data.authorUid == request.auth.uid;
         allow update: if false;
         allow delete: if isMember(clanId)
           && (resource.data.authorUid == request.auth.uid || isOwner(clanId));

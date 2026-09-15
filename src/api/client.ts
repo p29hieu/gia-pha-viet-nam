@@ -8,15 +8,15 @@
 import { SAMPLE_MARRIAGES, SAMPLE_MEMBERS } from '../domain/sampleData';
 import type { Marriage, Member, Note } from '../domain/types';
 import type { Account } from './auth';
-import { FIREBASE_READY } from './firebase';
+import type { ClanSummary } from './firestoreClient';
+import { DEFAULT_CLAN_ID, FIREBASE_READY } from './firebase';
 import * as fs from './firestoreClient';
 
-export { FIREBASE_READY };
+export { DEFAULT_CLAN_ID, FIREBASE_READY };
 export type { Account } from './auth';
-export type { Access, JoinRequest, Membership, Role } from './firestoreClient';
+export type { Access, ClanSummary, JoinRequest, Membership, Role } from './firestoreClient';
 
 export const IS_DEMO = !FIREBASE_READY;
-export const DEMO_CODE = 'GP-DEMO-2026';
 
 export interface NewMemberInput extends Omit<Member, 'id'> {
   spouseId?: string;
@@ -40,6 +40,37 @@ function requireAccount(): Account {
   return account;
 }
 
+/*
+ * Cây gia phả đang mở. Giữ ở đây thay vì truyền xuống từng lời gọi để phần còn
+ * lại của ứng dụng không phải biết tới clanId — hôm nay nó cũng chưa bao giờ ra
+ * khỏi tầng api. Tầng đăng nhập đặt vào sau khi đọc được id từ URL.
+ */
+let clanId: string | null = null;
+
+export function setClan(next: string | null): void {
+  clanId = next;
+}
+
+function requireClan(): string {
+  if (!clanId) throw new Error('Chưa chọn cây gia phả');
+  return clanId;
+}
+
+/** Danh sách cây gia phả mà người đang đăng nhập có quyền vào. */
+export async function listMyClans(): Promise<ClanSummary[]> {
+  if (IS_DEMO) {
+    return [
+      {
+        id: DEMO_CLAN_ID,
+        name: 'Dòng họ Nguyễn (dữ liệu mẫu)',
+        role: 'owner',
+        memberId: demoMyMemberId(),
+      },
+    ];
+  }
+  return fs.listMyClans(requireAccount().uid);
+}
+
 // ------------------------------------------------------------------ demo
 
 interface DemoState {
@@ -50,6 +81,8 @@ interface DemoState {
 }
 
 const DEMO_KEY = 'giapha_demo_state_v1';
+/** Chế độ demo không có Firestore nên tự đặt một id cây để URL vẫn có hình dạng như thật. */
+export const DEMO_CLAN_ID = 'demo';
 
 function loadDemo(): DemoState {
   try {
@@ -84,7 +117,7 @@ export async function loadClanData(): Promise<ClanData> {
     const s = loadDemo();
     return { members: s.members, marriages: s.marriages, notes: s.notes };
   }
-  return fs.loadClanData();
+  return fs.loadClanData(requireClan());
 }
 
 export async function setMyPosition(memberId: string): Promise<void> {
@@ -92,7 +125,7 @@ export async function setMyPosition(memberId: string): Promise<void> {
     saveDemo({ ...loadDemo(), myMemberId: memberId });
     return;
   }
-  await fs.setMyPosition(requireAccount().uid, memberId);
+  await fs.setMyPosition(requireClan(), requireAccount().uid, memberId);
 }
 
 export async function addMember(input: NewMemberInput): Promise<string> {
@@ -115,7 +148,7 @@ export async function addMember(input: NewMemberInput): Promise<string> {
     saveDemo(next);
     return id;
   }
-  return fs.addMember(requireAccount(), input);
+  return fs.addMember(requireClan(), requireAccount(), input);
 }
 
 export async function updateMember(id: string, patch: Partial<Member>): Promise<void> {
@@ -124,7 +157,7 @@ export async function updateMember(id: string, patch: Partial<Member>): Promise<
     saveDemo({ ...s, members: s.members.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
     return;
   }
-  await fs.updateMember(id, patch);
+  await fs.updateMember(requireClan(), id, patch);
 }
 
 export async function deleteMember(id: string): Promise<void> {
@@ -139,7 +172,7 @@ export async function deleteMember(id: string): Promise<void> {
     });
     return;
   }
-  await fs.deleteMember(id);
+  await fs.deleteMember(requireClan(), id);
 }
 
 export async function addMarriage(husbandId: string, wifeId: string): Promise<string> {
@@ -149,7 +182,7 @@ export async function addMarriage(husbandId: string, wifeId: string): Promise<st
     saveDemo({ ...st, marriages: [...st.marriages, { id, husbandId, wifeId, status: 'married' }] });
     return id;
   }
-  return fs.addMarriage(husbandId, wifeId);
+  return fs.addMarriage(requireClan(), husbandId, wifeId);
 }
 
 export async function deleteMarriage(id: string): Promise<void> {
@@ -158,7 +191,7 @@ export async function deleteMarriage(id: string): Promise<void> {
     saveDemo({ ...st, marriages: st.marriages.filter((w) => w.id !== id) });
     return;
   }
-  await fs.deleteMarriage(id);
+  await fs.deleteMarriage(requireClan(), id);
 }
 
 export async function addNote(memberId: string, content: string): Promise<Note> {
@@ -175,7 +208,7 @@ export async function addNote(memberId: string, content: string): Promise<Note> 
     saveDemo({ ...s, notes: [...s.notes, note] });
     return note;
   }
-  return fs.addNote(requireAccount(), memberId, content);
+  return fs.addNote(requireClan(), requireAccount(), memberId, content);
 }
 
 export async function deleteNote(id: string): Promise<void> {
@@ -184,7 +217,7 @@ export async function deleteNote(id: string): Promise<void> {
     saveDemo({ ...s, notes: s.notes.filter((n) => n.id !== id) });
     return;
   }
-  await fs.deleteNote(id);
+  await fs.deleteNote(requireClan(), id);
 }
 
 export function resetDemo(): void {

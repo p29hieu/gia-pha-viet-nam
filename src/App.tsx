@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { IS_DEMO } from './api/client';
-import { ClanSetup } from './components/auth/ClanSetup';
+import { DEFAULT_CLAN_ID, DEMO_CLAN_ID, IS_DEMO } from './api/client';
+import { ClanPicker } from './components/auth/ClanPicker';
 import { JoinGate } from './components/auth/JoinGate';
 import { JoinRequestsPanel } from './components/auth/JoinRequestsPanel';
 import { PositionPicker, type SelfDraft } from './components/auth/PositionPicker';
@@ -31,12 +31,17 @@ import {
 } from './domain/relations';
 import type { Member } from './domain/types';
 import { useFamilyData } from './hooks/useFamilyData';
+import { forgetClan, recallClan, rememberClan, useHashRoute } from './hooks/useHashRoute';
 import { useSession } from './hooks/useSession';
+import { clanOf } from './lib/route';
 import { useToasts } from './hooks/useToasts';
 import './styles/app.css';
 
 export default function App() {
-  const session = useSession();
+  const { route, go, replace } = useHashRoute();
+  // Chế độ demo luôn đứng trên một cây giả, để URL và luồng code giống hệt bản thật.
+  const clanId = clanOf(route) ?? (IS_DEMO ? DEMO_CLAN_ID : null);
+  const session = useSession(clanId);
   const isMember = session.state.status === 'member';
   const data = useFamilyData(isMember);
   const { toasts, push: toast, dismiss: dismissToast } = useToasts();
@@ -51,6 +56,18 @@ export default function App() {
 
   const { refresh } = data;
   const myMemberId = session.state.status === 'member' ? session.state.membership.memberId : '';
+
+  // Mở app ở địa chỉ trống thì quay lại cây lần trước xem, khỏi phải chọn lại.
+  // Dùng replace chứ không phải go: người bấm nút lùi không nên rơi vào vòng lặp.
+  useEffect(() => {
+    if (route.kind !== 'home') return;
+    const target = IS_DEMO ? DEMO_CLAN_ID : recallClan() || DEFAULT_CLAN_ID;
+    if (target) replace({ kind: 'clan', clanId: target });
+  }, [route.kind, replace]);
+
+  useEffect(() => {
+    if (isMember && clanId) rememberClan(clanId);
+  }, [isMember, clanId]);
 
   // Hai, ba người cùng vun một gia phả thì dữ liệu trên máy dễ cũ.
   // Quay lại app là lấy bản mới, nhưng chỉ khi lần tải trước đã đủ lâu.
@@ -378,13 +395,36 @@ export default function App() {
 
   if (s.status === 'signed-out') return <SignInCard onSignIn={session.signIn} />;
 
-  if (s.status === 'no-clan') {
+  if (s.status === 'choosing') {
     return (
-      <ClanSetup
+      <ClanPicker
         account={s.account}
+        clans={session.myClans}
         onCreate={session.createClan}
+        onOpen={(id) => go({ kind: 'clan', clanId: id })}
         onSignOut={() => void session.signOut()}
       />
+    );
+  }
+
+  if (s.status === 'no-clan') {
+    return (
+      <main className="splash">
+        <h1 className="splash__title">Không tìm thấy gia phả này</h1>
+        <p className="splash__text">
+          Đường dẫn trỏ tới cây <code>{clanId}</code>, nhưng cây đó không còn hoặc chưa từng có.
+        </p>
+        <button
+          className="btn btn--primary"
+          type="button"
+          onClick={() => {
+            forgetClan();
+            go({ kind: 'home' });
+          }}
+        >
+          Chọn gia phả khác
+        </button>
+      </main>
     );
   }
 
@@ -532,6 +572,7 @@ export default function App() {
           myMemberId={myMemberId}
           notes={data.notesByMember.get(selected.id) ?? []}
           canEdit={session.canEdit}
+          canComment={session.canComment}
           isAdmin={session.isOwner}
           onSelect={setSelectedId}
           onAddNote={handleAddNote}
@@ -571,7 +612,11 @@ export default function App() {
       )}
 
       {showRequests && (
-        <JoinRequestsPanel onClose={() => setShowRequests(false)} onChanged={() => undefined} />
+        <JoinRequestsPanel
+          clanId={clanId ?? ''}
+          onClose={() => setShowRequests(false)}
+          onChanged={() => void session.refreshClans()}
+        />
       )}
 
       {relationEdit?.kind === 'pick-parent' && (
@@ -616,9 +661,12 @@ export default function App() {
               relationEdit.memberId,
               relationEdit.siblingId,
             );
-            const ten = chung.map((s) => `${SLOTS[s].label.toLowerCase()} ${tenCua(
-              data.graph.members.get(relationEdit.siblingId)?.[SLOTS[s].field] ?? '',
-            )}`);
+            const ten = chung.map(
+              (s) =>
+                `${SLOTS[s].label.toLowerCase()} ${tenCua(
+                  data.graph.members.get(relationEdit.siblingId)?.[SLOTS[s].field] ?? '',
+                )}`,
+            );
             return `Hai người là anh chị em vì cùng ${ten.join(' và ')}. Gỡ sẽ xoá phần đó khỏi thẻ của ${tenCua(relationEdit.siblingId)}, nên hai người thôi là anh chị em. ${tenCua(relationEdit.siblingId)} vẫn ở trong gia phả.`;
           })()}
           confirmLabel="Gỡ"
