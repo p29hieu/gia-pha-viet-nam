@@ -88,13 +88,33 @@ export async function importBackup(
     );
   });
 
+  const gender = new Map(backup.members.map((m) => [m.id, m.gender]));
+  const seen = new Set<string>();
+
   backup.marriages.forEach((w) => {
     const { id, ...rest } = w;
     if (!ids.has(rest.husbandId) || !ids.has(rest.wifeId)) {
       skipped.push(`hon nhan ${id}: thieu mot ben`);
       return;
     }
-    batch.set(doc(marriagesRef, id), clean({ ...rest }));
+
+    // Moi nguoi chi duoc mot day hon phoi. Du lieu cu co the vi pham, nen bo qua
+    // va bao lai thay vi am tham nap vao roi de sai quy tac.
+    if (seen.has(rest.husbandId) || seen.has(rest.wifeId)) {
+      skipped.push(`hon nhan ${id}: mot ben da co day hon phoi khac`);
+      return;
+    }
+    seen.add(rest.husbandId);
+    seen.add(rest.wifeId);
+
+    // Ban cu xep vai theo gioi tinh nguoi vua them nen co cap bi dao nguoc.
+    let { husbandId, wifeId } = rest;
+    if (gender.get(husbandId) === 'F' && gender.get(wifeId) === 'M') {
+      [husbandId, wifeId] = [wifeId, husbandId];
+      warnings.push(`hon nhan ${id}: da dao lai dung vai chong/vo`);
+    }
+
+    batch.set(doc(marriagesRef, id), clean({ ...rest, husbandId, wifeId }));
   });
 
   (backup.notes ?? []).forEach((n) => {
