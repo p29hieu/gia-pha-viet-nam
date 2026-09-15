@@ -881,7 +881,13 @@ button.relation-row__name:active { color: var(--son); }
 .relation-row__btn:active { background: var(--son-wash); }
 .relation-row__btn--danger { color: var(--ink-faint); }
 .relation-row__btn--danger:active { background: var(--son-wash); color: var(--son-deep); }
-.relations__children { font-size: var(--text-sm); color: var(--ink-soft); padding: 0 var(--space-1); }
+/* Hàng cho quan hệ 0..n người: xếp dọc, mỗi người một dòng bấm được. */
+.relation-row--list { flex-direction: column; align-items: stretch; gap: var(--space-1); }
+.relation-row__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.people { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.people__item { display: flex; align-items: center; gap: var(--space-2); min-height: 1.75rem; }
+.people__item .relation-row__name { flex: 0 1 auto; }
+.people__meta { font-size: var(--text-xs); color: var(--ink-faint); flex: 1; min-width: 0; }
 
 @media (hover: hover) {
   .relation-row__btn:hover { background: var(--son-wash); }

@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { checkCanDelete } from '../../domain/edit';
 import type { FamilyGraph } from '../../domain/graph';
 import { resolveKinship } from '../../domain/kinship';
-import { SLOTS, readRelations, type ParentSlot } from '../../domain/relations';
+import { SLOTS, readRelations, siblingsOf, type ParentSlot } from '../../domain/relations';
 import type { Member, Note } from '../../domain/types';
 import { formatVnDate, lifespan } from '../../lib/text';
 import { Avatar } from '../ui/Avatar';
@@ -11,7 +11,9 @@ export type RelationAction =
   | { kind: 'pick-parent'; memberId: string; slot: ParentSlot }
   | { kind: 'clear-parent'; memberId: string; slot: ParentSlot }
   | { kind: 'pick-spouse'; memberId: string }
-  | { kind: 'clear-spouse'; memberId: string; marriageId: string };
+  | { kind: 'clear-spouse'; memberId: string; marriageId: string }
+  | { kind: 'pick-sibling'; memberId: string }
+  | { kind: 'clear-sibling'; memberId: string; siblingId: string };
 
 interface Props {
   member: Member;
@@ -62,6 +64,22 @@ export function PersonDetail({
   );
   const coQuanHeNuoi = tuyChon.some((p) => p.person);
   const deleteCheck = checkCanDelete(graph, member.id, notes.length);
+
+  // Danh xưng lấy từ chính engine, theo góc nhìn của người đang mở thẻ:
+  // trong thẻ của Cư thì Huyền là "chị", chứ không phải theo góc nhìn của tôi.
+  const anhChiEm = useMemo(
+    () =>
+      siblingsOf(graph, member.id).map((s) => ({
+        person: s.person,
+        meta: [resolveKinship(graph, member.id, s.person.id).callThem, s.note]
+          .filter(Boolean)
+          .join(' · '),
+        // Chỉ gỡ được khi đang chung cha mẹ RUỘT. Anh em qua cha mẹ nuôi thì
+        // phải sửa ở dòng cha/mẹ nuôi, gỡ ở đây không có gì để xoá.
+        goDuoc: s.sharedFather || s.sharedMother,
+      })),
+    [graph, member.id],
+  );
 
   return (
     <aside className="detail" aria-label={`Thông tin ${member.fullName}`}>
@@ -179,29 +197,48 @@ export function PersonDetail({
                     onOpen={onSelect}
                   />
                 ))}
+              <PeopleRow
+                label="Anh/chị/em"
+                items={anhChiEm.map((s) => ({
+                  person: s.person,
+                  meta: s.meta,
+                  onClear: s.goDuoc
+                    ? () =>
+                        onEditRelation({
+                          kind: 'clear-sibling',
+                          memberId: member.id,
+                          siblingId: s.person.id,
+                        })
+                    : undefined,
+                }))}
+                onOpen={onSelect}
+                onAdd={() => onEditRelation({ kind: 'pick-sibling', memberId: member.id })}
+              />
+
+              {rel.children.length > 0 && (
+                <PeopleRow
+                  label="Con"
+                  items={rel.children.map((c) => ({ person: c }))}
+                  onOpen={onSelect}
+                />
+              )}
+
+              {rel.otherChildren.length > 0 && (
+                <PeopleRow
+                  label="Nhận nuôi / đỡ đầu"
+                  items={rel.otherChildren.map((c) => ({
+                    person: c.person,
+                    meta: c.kind === 'adoptive' ? 'con nuôi' : 'con đỡ đầu',
+                  }))}
+                  onOpen={onSelect}
+                />
+              )}
             </div>
 
             {!hienThemQuanHe && !coQuanHeNuoi && (
               <button className="linkish" type="button" onClick={() => setHienThemQuanHe(true)}>
                 + Thêm cha mẹ nuôi hoặc đỡ đầu
               </button>
-            )}
-
-            {rel.children.length > 0 && (
-              <p className="relations__children">
-                <strong>Con ({rel.children.length}):</strong>{' '}
-                {rel.children.map((c) => c.fullName).join(', ')}. Sửa cha mẹ của từng người ngay
-                trong thẻ của họ.
-              </p>
-            )}
-            {rel.otherChildren.length > 0 && (
-              <p className="relations__children">
-                <strong>Nhận nuôi / đỡ đầu:</strong>{' '}
-                {rel.otherChildren
-                  .map((c) => `${c.person.fullName} (${c.kind === 'adoptive' ? 'con nuôi' : 'con đỡ đầu'})`)
-                  .join(', ')}
-                .
-              </p>
             )}
           </section>
         )}
@@ -320,6 +357,68 @@ function RelationRow({
           </button>
         )}
       </span>
+    </div>
+  );
+}
+
+/**
+ * Hàng cho quan hệ nhiều người: anh chị em, con, con nuôi.
+ * Khác RelationRow ở chỗ số người là 0..n nên xếp dọc, mỗi người một dòng
+ * bấm được để mở thẻ của họ.
+ */
+function PeopleRow({
+  label,
+  items,
+  onOpen,
+  onAdd,
+}: {
+  label: string;
+  items: Array<{ person: Member; meta?: string; onClear?: () => void }>;
+  onOpen: (id: string) => void;
+  onAdd?: () => void;
+}) {
+  return (
+    <div className="relation-row relation-row--list">
+      <div className="relation-row__head">
+        <span className="relation-row__label">
+          {label}
+          {items.length > 0 && ` (${items.length})`}
+        </span>
+        {onAdd && (
+          <button className="relation-row__btn" type="button" onClick={onAdd}>
+            + Thêm
+          </button>
+        )}
+      </div>
+
+      {items.length === 0 ? (
+        <span className="relation-row__name relation-row__name--empty">chưa có</span>
+      ) : (
+        <ul className="people">
+          {items.map(({ person, meta, onClear }) => (
+            <li className="people__item" key={person.id}>
+              <button
+                className="relation-row__name"
+                type="button"
+                onClick={() => onOpen(person.id)}
+              >
+                {person.fullName}
+              </button>
+              {meta && <span className="people__meta">{meta}</span>}
+              {onClear && (
+                <button
+                  className="relation-row__btn relation-row__btn--danger"
+                  type="button"
+                  onClick={onClear}
+                  aria-label={`Gỡ quan hệ với ${person.fullName}`}
+                >
+                  Gỡ
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

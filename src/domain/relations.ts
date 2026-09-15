@@ -1,4 +1,4 @@
-import { collectAncestors, getChildren, type FamilyGraph } from './graph';
+import { collectAncestors, getChildren, getSiblings, type FamilyGraph } from './graph';
 import { findMarriage, marriagesOf } from './marriage';
 import type { Gender, Member } from './types';
 
@@ -215,4 +215,126 @@ export function readRelations(graph: FamilyGraph, id: string): CurrentRelations 
       .filter((m): m is Member => Boolean(m)),
     otherChildren,
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * Anh chị em
+ *
+ * Đây là quan hệ SUY RA từ cha mẹ chung, không có cạnh riêng trong dữ
+ * liệu. Nối hai người thành anh chị em nghĩa là chép cha mẹ ruột của
+ * người này sang người kia; gỡ nghĩa là xoá phần cha mẹ đang chung.
+ * ------------------------------------------------------------------ */
+
+const BLOOD_SLOTS = ['father', 'mother'] as const;
+type BloodSlot = (typeof BLOOD_SLOTS)[number];
+
+export interface SiblingLink {
+  person: Member;
+  sharedFather: boolean;
+  sharedMother: boolean;
+  /** Chú thích khi không phải anh chị em ruột đầy đủ. */
+  note?: string;
+}
+
+/**
+ * Chỉ nói "khác mẹ" khi cả hai người ĐỀU đã ghi mẹ và hai bà khác nhau.
+ * Chưa ghi mẹ thì chỉ biết là chung bố, không được suy ra là khác mẹ.
+ */
+function ghiChuAnhEm(me: Member, s: Member, chungBo: boolean, chungMe: boolean): string | undefined {
+  if (chungBo && chungMe) return undefined;
+  if (chungBo) return me.motherId && s.motherId ? 'cùng cha khác mẹ' : 'chung bố';
+  if (chungMe) return me.fatherId && s.fatherId ? 'cùng mẹ khác cha' : 'chung mẹ';
+  return 'anh em qua quan hệ nuôi';
+}
+
+export function siblingsOf(graph: FamilyGraph, id: string): SiblingLink[] {
+  const me = graph.members.get(id);
+  if (!me) return [];
+  return getSiblings(graph, id)
+    .map((sid) => graph.members.get(sid))
+    .filter((s): s is Member => Boolean(s))
+    .map((s) => {
+      const sharedFather = Boolean(me.fatherId) && me.fatherId === s.fatherId;
+      const sharedMother = Boolean(me.motherId) && me.motherId === s.motherId;
+      return { person: s, sharedFather, sharedMother, note: ghiChuAnhEm(me, s, sharedFather, sharedMother) };
+    });
+}
+
+/** Những ô cha mẹ sẽ được điền để nối hai người thành anh chị em. */
+export function siblingPatch(
+  graph: FamilyGraph,
+  anchorId: string,
+  candidateId: string,
+): Array<{ slot: BloodSlot; parentId: string }> {
+  const anchor = graph.members.get(anchorId);
+  const cand = graph.members.get(candidateId);
+  if (!anchor || !cand) return [];
+  const out: Array<{ slot: BloodSlot; parentId: string }> = [];
+  for (const slot of BLOOD_SLOTS) {
+    const pid = anchor[SLOTS[slot].field];
+    // Chỉ điền vào ô còn trống — không bao giờ ghi đè cha mẹ đã ghi nhận.
+    if (pid && !cand[SLOTS[slot].field]) out.push({ slot, parentId: pid });
+  }
+  return out;
+}
+
+/** Hai người đang chung những ô cha mẹ ruột nào. */
+export function sharedBloodParents(graph: FamilyGraph, aId: string, bId: string): BloodSlot[] {
+  const a = graph.members.get(aId);
+  const b = graph.members.get(bId);
+  if (!a || !b) return [];
+  return BLOOD_SLOTS.filter((slot) => {
+    const f = SLOTS[slot].field;
+    return Boolean(a[f]) && a[f] === b[f];
+  });
+}
+
+export function canSetSibling(graph: FamilyGraph, anchorId: string, candidateId: string): Check {
+  if (anchorId === candidateId) return { ok: false, reason: 'Không thể chọn chính người này.' };
+
+  const anchor = graph.members.get(anchorId);
+  const cand = graph.members.get(candidateId);
+  if (!anchor || !cand) return { ok: false, reason: 'Không tìm thấy người này trong gia phả.' };
+
+  if (!anchor.fatherId && !anchor.motherId) {
+    return {
+      ok: false,
+      reason: `Chưa biết bố mẹ của ${anchor.fullName}. Thêm bố hoặc mẹ trước rồi mới nối được anh chị em.`,
+    };
+  }
+
+  if (getSiblings(graph, anchorId).includes(candidateId)) {
+    return { ok: false, reason: `${cand.fullName} đã là anh chị em với ${anchor.fullName}.` };
+  }
+
+  if (isDirectLine(graph, anchorId, candidateId)) {
+    return {
+      ok: false,
+      reason: `${cand.fullName} là người cùng huyết thống trực hệ với ${anchor.fullName}.`,
+    };
+  }
+
+  // Cha mẹ đã ghi mà lệch nhau thì dừng lại, để người dùng tự sửa ở thẻ của người kia.
+  for (const slot of BLOOD_SLOTS) {
+    const f = SLOTS[slot].field;
+    const cua = cand[f];
+    if (cua && anchor[f] && cua !== anchor[f]) {
+      const ten = graph.members.get(cua)?.fullName ?? 'người khác';
+      return {
+        ok: false,
+        reason: `${cand.fullName} đã ghi ${SLOTS[slot].label.toLowerCase()} là ${ten}. Sửa ở thẻ của ${cand.fullName}.`,
+      };
+    }
+  }
+
+  const patch = siblingPatch(graph, anchorId, candidateId);
+  if (patch.length === 0) return { ok: false, reason: 'Không có ô cha mẹ nào để điền thêm.' };
+
+  // Mượn lại đúng bộ kiểm tra của việc đặt cha mẹ: giới tính, vòng lặp, trùng ô.
+  for (const p of patch) {
+    const c = canSetParent(graph, candidateId, p.parentId, p.slot);
+    if (!c.ok) return c;
+  }
+
+  return OK;
 }

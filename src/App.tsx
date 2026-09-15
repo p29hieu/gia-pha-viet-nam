@@ -20,7 +20,15 @@ import { ToastStack } from './components/ui/Toast';
 import { checkCanDelete } from './domain/edit';
 import { getSpouses } from './domain/graph';
 import { marriagesOf, spouseIn } from './domain/marriage';
-import { SLOTS, canSetParent, canSetSpouse, type ParentSlot } from './domain/relations';
+import {
+  SLOTS,
+  canSetParent,
+  canSetSibling,
+  canSetSpouse,
+  sharedBloodParents,
+  siblingPatch,
+  type ParentSlot,
+} from './domain/relations';
 import type { Member } from './domain/types';
 import { useFamilyData } from './hooks/useFamilyData';
 import { useSession } from './hooks/useSession';
@@ -300,6 +308,39 @@ export default function App() {
     [chay, data, tenCua],
   );
 
+  /**
+   * Anh chị em không có cạnh riêng trong dữ liệu — nó suy ra từ cha mẹ chung.
+   * Nối tức là chép cha mẹ ruột của người neo sang người kia, và chỉ chép vào
+   * ô còn trống để không bao giờ ghi đè cha mẹ ai đó đã ghi nhận.
+   */
+  const datAnhEm = useCallback(
+    (anchorId: string, candidateId: string) => {
+      const patch = siblingPatch(data.graph, anchorId, candidateId);
+      if (patch.length === 0) return;
+      const fields = Object.fromEntries(patch.map((p) => [SLOTS[p.slot].field, p.parentId]));
+      void chay(
+        () => data.updateMember(candidateId, fields),
+        `${tenCua(candidateId)} và ${tenCua(anchorId)} đã thành anh chị em`,
+        'Không nối được anh chị em.',
+      );
+    },
+    [chay, data, tenCua],
+  );
+
+  const goAnhEm = useCallback(
+    (anchorId: string, siblingId: string) => {
+      const chung = sharedBloodParents(data.graph, anchorId, siblingId);
+      if (chung.length === 0) return;
+      const fields = Object.fromEntries(chung.map((s) => [SLOTS[s].field, '']));
+      void chay(
+        () => data.updateMember(siblingId, fields),
+        `${tenCua(siblingId)} và ${tenCua(anchorId)} thôi là anh chị em`,
+        'Không gỡ được quan hệ anh chị em.',
+      );
+    },
+    [chay, data, tenCua],
+  );
+
   const handleRefresh = useCallback(() => {
     void (async () => {
       try {
@@ -551,6 +592,38 @@ export default function App() {
           members={data.members}
           check={(c) => canSetSpouse(data.graph, relationEdit.memberId, c.id)}
           onPick={(id) => datVoChong(relationEdit.memberId, id)}
+          onCancel={() => setRelationEdit(null)}
+        />
+      )}
+
+      {relationEdit?.kind === 'pick-sibling' && (
+        <MemberPicker
+          title="Chọn anh/chị/em"
+          lead={`Chọn người trong gia phả làm anh/chị/em của ${tenCua(relationEdit.memberId)}. Người đó sẽ nhận cùng bố mẹ, nên chỉ chọn được người chưa ghi bố mẹ khác.`}
+          members={data.members}
+          check={(c) => canSetSibling(data.graph, relationEdit.memberId, c.id)}
+          onPick={(id) => datAnhEm(relationEdit.memberId, id)}
+          onCancel={() => setRelationEdit(null)}
+        />
+      )}
+
+      {relationEdit?.kind === 'clear-sibling' && (
+        <ConfirmDialog
+          title="Gỡ quan hệ anh chị em?"
+          message={(() => {
+            const chung = sharedBloodParents(
+              data.graph,
+              relationEdit.memberId,
+              relationEdit.siblingId,
+            );
+            const ten = chung.map((s) => `${SLOTS[s].label.toLowerCase()} ${tenCua(
+              data.graph.members.get(relationEdit.siblingId)?.[SLOTS[s].field] ?? '',
+            )}`);
+            return `Hai người là anh chị em vì cùng ${ten.join(' và ')}. Gỡ sẽ xoá phần đó khỏi thẻ của ${tenCua(relationEdit.siblingId)}, nên hai người thôi là anh chị em. ${tenCua(relationEdit.siblingId)} vẫn ở trong gia phả.`;
+          })()}
+          confirmLabel="Gỡ"
+          danger
+          onConfirm={() => goAnhEm(relationEdit.memberId, relationEdit.siblingId)}
           onCancel={() => setRelationEdit(null)}
         />
       )}

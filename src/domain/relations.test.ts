@@ -6,7 +6,11 @@ import {
   isDescendantOf,
   isDirectLine,
   placementParents,
+  canSetSibling,
   readRelations,
+  sharedBloodParents,
+  siblingPatch,
+  siblingsOf,
 } from './relations';
 import { SAMPLE_MARRIAGES, SAMPLE_MEMBERS } from './sampleData';
 
@@ -168,5 +172,102 @@ describe('đọc quan hệ trực tiếp', () => {
   it('id không tồn tại không làm sập', () => {
     const r = readRelations(graph, 'khong_co');
     expect(r.children).toEqual([]);
+  });
+});
+
+describe('anh chị em', () => {
+  it('liệt kê đủ anh, em gái và em cùng cha', () => {
+    const ten = siblingsOf(graph, 'ego').map((s) => s.person.id);
+    expect(ten).toEqual(['anh', 'em_gai', 'em_cung_cha']);
+  });
+
+  it('chung cả bố lẫn mẹ thì là ruột, không cần chú thích', () => {
+    const anh = siblingsOf(graph, 'ego').find((s) => s.person.id === 'anh');
+    expect(anh?.sharedFather).toBe(true);
+    expect(anh?.sharedMother).toBe(true);
+    expect(anh?.note).toBeUndefined();
+  });
+
+  it('chung bố, hai mẹ khác nhau thì ghi cùng cha khác mẹ', () => {
+    const em = siblingsOf(graph, 'ego').find((s) => s.person.id === 'em_cung_cha');
+    expect(em?.note).toBe('cùng cha khác mẹ');
+  });
+
+  it('chung bố nhưng chưa ai ghi mẹ thì chỉ nói chung bố, không suy ra là khác mẹ', () => {
+    const g = buildGraph([
+      { id: 'bo', fullName: 'Bố', gender: 'M' },
+      { id: 'a', fullName: 'A', gender: 'M', fatherId: 'bo' },
+      { id: 'b', fullName: 'B', gender: 'F', fatherId: 'bo' },
+    ]);
+    expect(siblingsOf(g, 'a').map((s) => s.note)).toEqual(['chung bố']);
+  });
+});
+
+describe('nối anh chị em', () => {
+  it('không cho chọn chính mình', () => {
+    expect(canSetSibling(graph, 'ego', 'ego').ok).toBe(false);
+  });
+
+  it('không nối lại người đã là anh chị em', () => {
+    const c = canSetSibling(graph, 'ego', 'anh');
+    expect(c.ok).toBe(false);
+    expect(c.reason).toContain('đã là anh chị em');
+  });
+
+  it('không nối con ruột thành anh chị em', () => {
+    expect(canSetSibling(graph, 'ego', 'con_trai').ok).toBe(false);
+  });
+
+  it('người chưa biết bố mẹ thì chưa nối được, phải thêm bố mẹ trước', () => {
+    const g = buildGraph([
+      { id: 'a', fullName: 'A', gender: 'M' },
+      { id: 'b', fullName: 'B', gender: 'F' },
+    ]);
+    const c = canSetSibling(g, 'a', 'b');
+    expect(c.ok).toBe(false);
+    expect(c.reason).toContain('Thêm bố hoặc mẹ trước');
+  });
+
+  it('không ghi đè bố mẹ đã có sẵn của người kia', () => {
+    const c = canSetSibling(graph, 'ego', 'con_bac');
+    expect(c.ok).toBe(false);
+    expect(c.reason).toContain('Nguyễn Văn Cả');
+  });
+
+  it('nối được người chưa có bố mẹ', () => {
+    const g = buildGraph([
+      ...SAMPLE_MEMBERS,
+      { id: 'moi', fullName: 'Người Mới', gender: 'F' },
+    ]);
+    expect(canSetSibling(g, 'ego', 'moi').ok).toBe(true);
+  });
+
+  it('chỉ điền vào ô còn trống, không động tới ô đã có', () => {
+    const g = buildGraph([
+      ...SAMPLE_MEMBERS,
+      { id: 'moi', fullName: 'Người Mới', gender: 'F', fatherId: 'bo' },
+    ]);
+    expect(siblingPatch(g, 'ego', 'moi')).toEqual([{ slot: 'mother', parentId: 'me' }]);
+  });
+
+  it('người chưa có bố mẹ thì điền cả hai ô', () => {
+    const g = buildGraph([
+      ...SAMPLE_MEMBERS,
+      { id: 'moi', fullName: 'Người Mới', gender: 'F' },
+    ]);
+    expect(siblingPatch(g, 'ego', 'moi')).toEqual([
+      { slot: 'father', parentId: 'bo' },
+      { slot: 'mother', parentId: 'me' },
+    ]);
+  });
+});
+
+describe('gỡ anh chị em', () => {
+  it('anh em ruột thì gỡ cả bố lẫn mẹ', () => {
+    expect(sharedBloodParents(graph, 'ego', 'anh')).toEqual(['father', 'mother']);
+  });
+
+  it('em cùng cha thì chỉ gỡ bố, giữ nguyên mẹ riêng', () => {
+    expect(sharedBloodParents(graph, 'ego', 'em_cung_cha')).toEqual(['father']);
   });
 });
