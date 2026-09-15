@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { findMarriage, marriagesOf, orderCouple, pendingParentLink, spouseIn } from './marriage';
+import {
+  findMarriage,
+  marriagesOf,
+  multipleSpouses,
+  orderCouple,
+  pendingParentLink,
+  spouseIn,
+} from './marriage';
 import type { Marriage, Member } from './types';
 
 const bo: Member = { id: 'bo', fullName: 'Bố', gender: 'M' };
@@ -64,5 +71,27 @@ describe('nối cha mẹ thành cặp', () => {
 
   it('không tìm thấy đứa con thì trả null', () => {
     expect(pendingParentLink([bo, me], [], 'con')).toBeNull();
+  });
+});
+
+describe('một người chỉ được một dây hôn phối', () => {
+  it('không ai vi phạm thì trả về rỗng', () => {
+    expect(multipleSpouses([cuoi]).size).toBe(0);
+  });
+
+  it('chỉ ra đúng người đang có hai dây', () => {
+    const w2: Marriage = { id: 'w2', husbandId: 'bo', wifeId: 'me_hai', status: 'married' };
+    const viPham = multipleSpouses([cuoi, w2]);
+    expect([...viPham.keys()]).toEqual(['bo']);
+    expect(viPham.get('bo')).toHaveLength(2);
+  });
+
+  it('bắt được cả khi người đó đứng vai vợ ở một dây và vai chồng ở dây kia', () => {
+    const w2: Marriage = { id: 'w2', husbandId: 'x', wifeId: 'me', status: 'married' };
+    expect([...multipleSpouses([cuoi, w2]).keys()]).toEqual(['me']);
+  });
+
+  it('danh sách rỗng thì không có vi phạm', () => {
+    expect(multipleSpouses([]).size).toBe(0);
   });
 });

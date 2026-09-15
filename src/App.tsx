@@ -69,12 +69,12 @@ export default function App() {
       if (!fatherId || !motherId) return null;
       const father = data.graph.members.get(fatherId) ?? { id: fatherId, gender: newGender ?? 'M' };
       const mother = data.graph.members.get(motherId) ?? { id: motherId, gender: newGender ?? 'F' };
-      await data.linkSpouses(
+      const huy = await data.linkSpouses(
         { id: father.id, gender: father.gender },
         { id: mother.id, gender: mother.gender },
       );
       const ten = (id: string) => data.graph.members.get(id)?.fullName ?? 'người mới';
-      return `${ten(fatherId)} và ${ten(motherId)}`;
+      return { ten: `${ten(fatherId)} và ${ten(motherId)}`, huy: huy.length };
     },
     [data],
   );
@@ -95,12 +95,12 @@ export default function App() {
               motherId: anchor.gender === 'F' ? anchor.id : spouse,
             });
           } else if (relation === 'vo-chong') {
-            // Anh Hiếu chọn: mỗi người chỉ giữ một liên kết vợ chồng tại một thời
-            // điểm, thêm người mới thì huỷ liên kết cũ đi.
-            const removed = await data.unlinkAllSpouses(anchor.id);
-            await data.addMember({ ...draft, spouseId: anchor.id });
-            if (removed.length > 0) {
-              toast('info', `Đã huỷ liên kết vợ chồng cũ của ${anchor.fullName}`);
+            // Không dùng spouseId của addMember nữa: cho mọi đường nối đi chung
+            // một cửa linkSpouses để quy tắc một dây hôn phối luôn được áp dụng.
+            const newId = await data.addMember(draft);
+            if (newId) {
+              const huy = await data.linkSpouses(anchor, { id: newId, gender: draft.gender });
+              if (huy.length > 0) toast('info', `Đã huỷ dây hôn phối cũ của ${anchor.fullName}`);
             }
           } else if (relation === 'anh-chi-em') {
             await data.addMember({
@@ -126,7 +126,14 @@ export default function App() {
                 relation === 'bo' ? otherParentId : newId,
                 relation === 'bo' ? 'M' : 'F',
               );
-              if (linked) toast('info', `Đã nối ${linked} thành vợ chồng`);
+              if (linked) {
+                toast(
+                  'info',
+                  linked.huy > 0
+                    ? `Đã nối ${linked.ten} thành vợ chồng, và huỷ dây hôn phối cũ`
+                    : `Đã nối ${linked.ten} thành vợ chồng`,
+                );
+              }
             }
           }
           toast('success', `Đã thêm ${draft.fullName} vào gia phả`);

@@ -156,11 +156,35 @@ export function useFamilyData(ready: boolean) {
     [snapshot, apply, send],
   );
 
-  /** Nối hai người thành vợ chồng. Đã nối rồi thì thôi. */
+  const unlinkMarriage = useCallback(
+    async (id: string) => {
+      const before = snapshot();
+      apply((cur) => opt.removeMarriage(cur, id));
+      await send(before, () => api.deleteMarriage(id));
+    },
+    [snapshot, apply, send],
+  );
+
+  /**
+   * Noi hai nguoi thanh vo chong.
+   *
+   * Theo tuc Viet Nam, moi nguoi chi giu MOT day hon phoi tai mot thoi diem.
+   * Day la cho duy nhat tao lien ket, nen dat quy tac o day thi moi duong them
+   * deu tuan thu: huy het day cu cua ca hai ben roi moi noi.
+   * Tra ve nhung lien ket da bi huy de noi goi bao cho nguoi dung.
+   */
   const linkSpouses = useCallback(
     async (a: Pick<Member, 'id' | 'gender'>, b: Pick<Member, 'id' | 'gender'>) => {
+      if (findMarriage(stateRef.current.marriages, a.id, b.id)) return [];
+
+      // Doc mot lan cho ca hai ben: doc hai lan thi lan sau co the chua thay
+      // thay doi cua lan truoc, tuy thoi diem React render.
+      const cu = stateRef.current.marriages;
+      const phaiHuy = [...marriagesOf(cu, a.id), ...marriagesOf(cu, b.id)];
+      const duyNhat = [...new Map(phaiHuy.map((m) => [m.id, m])).values()];
+      for (const m of duyNhat) await unlinkMarriage(m.id);
+
       const before = snapshot();
-      if (findMarriage(stateRef.current.marriages, a.id, b.id)) return;
       const { husbandId, wifeId } = orderCouple(a, b);
       const draft: Marriage = { id: opt.tempId('tmpw'), husbandId, wifeId, status: 'married' };
       apply((cur) => opt.addMarriage(cur, draft));
@@ -169,17 +193,9 @@ export function useFamilyData(ready: boolean) {
         const realId = await api.addMarriage(husbandId, wifeId);
         apply((cur) => opt.commitId(cur, draft.id, realId));
       });
+      return duyNhat;
     },
-    [snapshot, apply, send],
-  );
-
-  const unlinkMarriage = useCallback(
-    async (id: string) => {
-      const before = snapshot();
-      apply((cur) => opt.removeMarriage(cur, id));
-      await send(before, () => api.deleteMarriage(id));
-    },
-    [snapshot, apply, send],
+    [snapshot, apply, send, unlinkMarriage],
   );
 
   /** Huỷ mọi liên kết vợ chồng hiện có của một người. Trả về những gì đã huỷ. */

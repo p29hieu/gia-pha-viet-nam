@@ -57,3 +57,21 @@ export function pendingParentLink(
 
   return { a: father, b: mother };
 }
+
+/**
+ * Nhung nguoi dang co nhieu hon mot day hon phoi.
+ *
+ * Theo tuc Viet Nam moi nguoi chi co mot vo hoac mot chong tai mot thoi diem,
+ * nen day la du lieu sai can bao cho nguoi dung, khong phai truong hop hop le.
+ */
+export function multipleSpouses(marriages: Marriage[]): Map<string, Marriage[]> {
+  const byPerson = new Map<string, Marriage[]>();
+  marriages.forEach((w) => {
+    [w.husbandId, w.wifeId].forEach((id) => {
+      const list = byPerson.get(id);
+      if (list) list.push(w);
+      else byPerson.set(id, [w]);
+    });
+  });
+  return new Map([...byPerson].filter(([, list]) => list.length > 1));
+}
