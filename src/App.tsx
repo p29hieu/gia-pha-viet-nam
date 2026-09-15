@@ -400,6 +400,8 @@ export default function App() {
       <ClanPicker
         account={s.account}
         clans={session.myClans}
+        error={session.clansError}
+        onRetry={() => void session.refreshClans()}
         onCreate={session.createClan}
         onOpen={(id) => go({ kind: 'clan', clanId: id })}
         onSignOut={() => void session.signOut()}

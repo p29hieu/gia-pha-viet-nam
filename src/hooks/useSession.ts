@@ -60,14 +60,18 @@ function demoSession(): SessionState {
 export function useSession(clanId: string | null) {
   const [state, setState] = useState<SessionState>({ status: 'loading' });
   const [myClans, setMyClans] = useState<ClanSummary[]>([]);
+  const [clansError, setClansError] = useState('');
 
   const loadMyClans = useCallback(async () => {
     try {
       setMyClans(await listMyClans());
-    } catch {
-      // Không đọc được danh sách thì màn chọn cây hiện rỗng kèm lời nhắc; không
-      // nên vì thế mà chặn luôn người đang có sẵn id cây trong URL.
+      setClansError('');
+    } catch (err) {
+      // Phải phân biệt "chưa có cây nào" với "không đọc được danh sách". Gộp
+      // hai thứ này lại là màn chọn cây mời người dùng lập cây mới đúng lúc cây
+      // cũ của họ vẫn còn nguyên — rồi họ lập nhầm cây thứ hai.
       setMyClans([]);
+      setClansError((err as Error).message);
     }
   }, []);
 
@@ -104,6 +108,7 @@ export function useSession(clanId: string | null) {
       if (!account) {
         setState({ status: 'signed-out' });
         setMyClans([]);
+        setClansError('');
         return;
       }
       void loadMyClans();
@@ -170,6 +175,7 @@ export function useSession(clanId: string | null) {
     state,
     role,
     myClans,
+    clansError,
     refreshClans: loadMyClans,
     ...perms,
     signIn,

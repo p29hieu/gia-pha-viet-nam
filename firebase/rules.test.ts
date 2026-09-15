@@ -80,7 +80,10 @@ beforeEach(async () => {
     await ai(XEM, 'viewer');
     await ai(LA, 'owner', CAY_KHAC);
 
-    await setDoc(doc(d, 'clans', CAY, 'members', 'm_01'), { fullName: 'Nguyễn Văn A', gender: 'M' });
+    await setDoc(doc(d, 'clans', CAY, 'members', 'm_01'), {
+      fullName: 'Nguyễn Văn A',
+      gender: 'M',
+    });
     await setDoc(doc(d, 'clans', CAY, 'notes', 'n_chu'), {
       memberId: 'm_01',
       authorUid: CHU,
@@ -230,7 +233,9 @@ describe('mức toàn quyền', () => {
 
 describe('chủ họ', () => {
   it('KHÔNG tự hạ quyền mình — hạ xong là dòng họ không ai mở khoá được', async () => {
-    await assertFails(updateDoc(doc(db(CHU), 'clans', CAY, 'memberships', CHU), { role: 'viewer' }));
+    await assertFails(
+      updateDoc(doc(db(CHU), 'clans', CAY, 'memberships', CHU), { role: 'viewer' }),
+    );
   });
 
   it('đổi được mức quyền của người khác', async () => {

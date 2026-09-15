@@ -68,7 +68,7 @@ service cloud.firestore {
     // moi nguoi chi doc duoc chinh ban ghi mang uid cua minh, o bat ky cay nao.
     //
     // Truy van phia client BUOC phai kem where('uid','==',uid) thi luat nay moi
-    // duyet duoc — do dung mau quyen so huu ma Firebase khuyen nghi cho
+    // duyet duoc - do dung mau quyen so huu ma Firebase khuyen nghi cho
     // collection group. Ban ghi membership vi the phai co truong uid, va luat
     // ghi ben duoi ep truong do bang chinh id document.
     match /{path=**}/memberships/{mid} {
@@ -114,7 +114,7 @@ service cloud.firestore {
             (canManage(clanId) && request.resource.data.role != 'owner')
           );
 
-        // Ban ghi cua chu ho bat kha xam pham — ke ca chinh chu cung khong tu
+        // Ban ghi cua chu ho bat kha xam pham - ke ca chinh chu cung khong tu
         // ha quyen minh, vi ha xong la dong ho khong con ai mo khoa duoc.
         allow update: if canManage(clanId)
           && request.resource.data.uid == uid

@@ -6,6 +6,9 @@ import { ROLE_LABEL } from '../../domain/perm';
 interface Props {
   account: Account;
   clans: ClanSummary[];
+  /** Lỗi khi đọc danh sách — khác hẳn với "chưa có cây nào". */
+  error: string;
+  onRetry: () => void;
   /** Trả về id cây vừa lập để tầng trên mở luôn. */
   onCreate: (name: string) => Promise<string>;
   onOpen: (clanId: string) => void;
@@ -19,21 +22,22 @@ interface Props {
  * đăng nhập phải hỏi vào cây nào. Người mới tinh chưa có cây nào thì màn này
  * chính là chỗ lập cây đầu tiên.
  */
-export function ClanPicker({ account, clans, onCreate, onOpen, onSignOut }: Props) {
-  const chuaCoCay = clans.length === 0;
+export function ClanPicker({ account, clans, error, onRetry, onOpen, onCreate, onSignOut }: Props) {
+  // Chỉ dám nói "chưa có cây nào" khi đọc được danh sách mà nó rỗng thật.
+  const chuaCoCay = clans.length === 0 && !error;
   const [dangLap, setDangLap] = useState(chuaCoCay);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [loiTao, setLoiTao] = useState('');
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError('');
+    setLoiTao('');
     try {
       onOpen(await onCreate(name));
     } catch (err) {
-      setError((err as Error).message);
+      setLoiTao((err as Error).message);
       setBusy(false);
     }
   }
@@ -46,7 +50,12 @@ export function ClanPicker({ account, clans, onCreate, onOpen, onSignOut }: Prop
           {chuaCoCay ? 'Lập gia phả dòng họ' : 'Bạn muốn mở cây nào?'}
         </h1>
 
-        {chuaCoCay ? (
+        {error ? (
+          <p className="login__lead">
+            Chưa đọc được danh sách gia phả của bạn. Gia phả cũ vẫn còn nguyên — đừng lập cây mới,
+            hãy thử lại.
+          </p>
+        ) : chuaCoCay ? (
           <p className="login__lead">
             Chưa có dòng họ nào của bạn ở đây. Bạn đứng ra lập thì sẽ là chủ họ: mời người nhà vào,
             phân quyền xem, bình luận hay sửa.
@@ -56,6 +65,17 @@ export function ClanPicker({ account, clans, onCreate, onOpen, onSignOut }: Prop
             Một người có thể ở nhiều dòng họ — họ nội, họ ngoại, họ bên vợ. Mỗi cây có đường link
             riêng, gửi được cho người nhà.
           </p>
+        )}
+
+        {error && (
+          <>
+            <p className="login__error" role="alert">
+              {error}
+            </p>
+            <button className="btn btn--primary btn--block" type="button" onClick={onRetry}>
+              Thử lại
+            </button>
+          </>
         )}
 
         {clans.length > 0 && (
@@ -85,9 +105,9 @@ export function ClanPicker({ account, clans, onCreate, onOpen, onSignOut }: Prop
               />
             </label>
 
-            {error && (
+            {loiTao && (
               <p className="login__error" role="alert">
-                {error}
+                {loiTao}
               </p>
             )}
 
@@ -110,9 +130,11 @@ export function ClanPicker({ account, clans, onCreate, onOpen, onSignOut }: Prop
             )}
           </form>
         ) : (
-          <button className="btn btn--block" type="button" onClick={() => setDangLap(true)}>
-            + Lập cây gia phả mới
-          </button>
+          !error && (
+            <button className="btn btn--block" type="button" onClick={() => setDangLap(true)}>
+              + Lập cây gia phả mới
+            </button>
+          )
         )}
 
         <p className="login__hint">
