@@ -11,7 +11,8 @@ import {
   type MemberDraft,
   type Relation,
 } from './components/person/MemberForm';
-import { PersonDetail } from './components/person/PersonDetail';
+import { MemberPicker } from './components/person/MemberPicker';
+import { PersonDetail, type RelationAction } from './components/person/PersonDetail';
 import { SearchBar } from './components/search/SearchBar';
 import { FamilyTree } from './components/tree/FamilyTree';
 import { ConfirmDialog } from './components/ui/ConfirmDialog';
@@ -19,6 +20,7 @@ import { ToastStack } from './components/ui/Toast';
 import { checkCanDelete } from './domain/edit';
 import { getSpouses } from './domain/graph';
 import { marriagesOf, spouseIn } from './domain/marriage';
+import { canSetParent, canSetSpouse } from './domain/relations';
 import type { Member } from './domain/types';
 import { useFamilyData } from './hooks/useFamilyData';
 import { useSession } from './hooks/useSession';
@@ -34,6 +36,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [relationEdit, setRelationEdit] = useState<RelationAction | null>(null);
   const [showRequests, setShowRequests] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -223,6 +226,78 @@ export default function App() {
       }
     },
     [data, toast],
+  );
+
+  // ------------------------------------------------------- sửa quan hệ hai chiều
+
+  const tenCua = useCallback(
+    (id: string) => data.graph.members.get(id)?.fullName ?? 'người này',
+    [data.graph],
+  );
+
+  const chay = useCallback(
+    async (viec: () => Promise<void>, thanhCong: string, hongThi: string) => {
+      setRelationEdit(null);
+      try {
+        await viec();
+        toast('success', thanhCong);
+      } catch (err) {
+        toast('error', `${hongThi} ${(err as Error).message}`);
+      }
+    },
+    [toast],
+  );
+
+  const datChaMe = useCallback(
+    (childId: string, slot: 'father' | 'mother', parentId: string) => {
+      const nhan = slot === 'father' ? 'bố' : 'mẹ';
+      void chay(
+        () => data.updateMember(childId, slot === 'father' ? { fatherId: parentId } : { motherId: parentId }),
+        `Đã đặt ${tenCua(parentId)} làm ${nhan} của ${tenCua(childId)}`,
+        `Không đặt được ${nhan}.`,
+      );
+    },
+    [chay, data, tenCua],
+  );
+
+  const goChaMe = useCallback(
+    (childId: string, slot: 'father' | 'mother') => {
+      const nhan = slot === 'father' ? 'bố' : 'mẹ';
+      void chay(
+        () => data.updateMember(childId, slot === 'father' ? { fatherId: '' } : { motherId: '' }),
+        `Đã gỡ ${nhan} của ${tenCua(childId)}`,
+        `Không gỡ được ${nhan}.`,
+      );
+    },
+    [chay, data, tenCua],
+  );
+
+  const datVoChong = useCallback(
+    (aId: string, bId: string) => {
+      const a = data.graph.members.get(aId);
+      const b = data.graph.members.get(bId);
+      if (!a || !b) return;
+      void chay(
+        async () => {
+          const huy = await data.linkSpouses(a, b);
+          if (huy.length > 0) toast('info', 'Đã huỷ dây hôn phối cũ');
+        },
+        `Đã nối ${a.fullName} và ${b.fullName} thành vợ chồng`,
+        'Không nối được.',
+      );
+    },
+    [chay, data, toast],
+  );
+
+  const goVoChong = useCallback(
+    (marriageId: string, memberId: string) => {
+      void chay(
+        () => data.unlinkMarriage(marriageId),
+        `Đã gỡ dây hôn phối của ${tenCua(memberId)}`,
+        'Không gỡ được dây hôn phối.',
+      );
+    },
+    [chay, data, tenCua],
   );
 
   const handleRefresh = useCallback(() => {
@@ -428,6 +503,7 @@ export default function App() {
             const member = data.graph.members.get(id);
             if (member) setFormMode({ kind: 'edit', member });
           }}
+          onEditRelation={setRelationEdit}
           onDelete={setDeleteId}
           onClose={() => setSelectedId(null)}
         />
@@ -455,6 +531,66 @@ export default function App() {
 
       {showRequests && (
         <JoinRequestsPanel onClose={() => setShowRequests(false)} onChanged={() => undefined} />
+      )}
+
+      {relationEdit?.kind === 'pick-father' && (
+        <MemberPicker
+          title="Chọn bố"
+          lead={`Chọn người trong gia phả làm bố của ${tenCua(relationEdit.memberId)}.`}
+          members={data.members}
+          check={(c) => canSetParent(data.graph, relationEdit.memberId, c.id, 'father')}
+          onPick={(id) => datChaMe(relationEdit.memberId, 'father', id)}
+          onCancel={() => setRelationEdit(null)}
+        />
+      )}
+
+      {relationEdit?.kind === 'pick-mother' && (
+        <MemberPicker
+          title="Chọn mẹ"
+          lead={`Chọn người trong gia phả làm mẹ của ${tenCua(relationEdit.memberId)}.`}
+          members={data.members}
+          check={(c) => canSetParent(data.graph, relationEdit.memberId, c.id, 'mother')}
+          onPick={(id) => datChaMe(relationEdit.memberId, 'mother', id)}
+          onCancel={() => setRelationEdit(null)}
+        />
+      )}
+
+      {relationEdit?.kind === 'pick-spouse' && (
+        <MemberPicker
+          title="Chọn vợ / chồng"
+          lead={`Chọn người trong gia phả làm vợ/chồng của ${tenCua(relationEdit.memberId)}. Mỗi người chỉ giữ một dây hôn phối, nên dây cũ sẽ bị huỷ.`}
+          members={data.members}
+          check={(c) => canSetSpouse(data.graph, relationEdit.memberId, c.id)}
+          onPick={(id) => datVoChong(relationEdit.memberId, id)}
+          onCancel={() => setRelationEdit(null)}
+        />
+      )}
+
+      {(relationEdit?.kind === 'clear-father' || relationEdit?.kind === 'clear-mother') && (
+        <ConfirmDialog
+          title={relationEdit.kind === 'clear-father' ? 'Gỡ bố?' : 'Gỡ mẹ?'}
+          message={`${tenCua(relationEdit.memberId)} sẽ không còn ghi nhận ${relationEdit.kind === 'clear-father' ? 'bố' : 'mẹ'} nữa. Người kia vẫn ở trong gia phả.`}
+          confirmLabel="Gỡ"
+          danger
+          onConfirm={() =>
+            goChaMe(
+              relationEdit.memberId,
+              relationEdit.kind === 'clear-father' ? 'father' : 'mother',
+            )
+          }
+          onCancel={() => setRelationEdit(null)}
+        />
+      )}
+
+      {relationEdit?.kind === 'clear-spouse' && (
+        <ConfirmDialog
+          title="Gỡ dây hôn phối?"
+          message={`Hai người sẽ không còn là vợ chồng trong gia phả. Cả hai vẫn ở nguyên, con cái vẫn giữ cha mẹ như cũ.`}
+          confirmLabel="Gỡ"
+          danger
+          onConfirm={() => goVoChong(relationEdit.marriageId, relationEdit.memberId)}
+          onCancel={() => setRelationEdit(null)}
+        />
       )}
 
       <ToastStack toasts={toasts} onDismiss={dismissToast} />

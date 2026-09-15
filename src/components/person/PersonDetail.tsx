@@ -2,9 +2,18 @@ import { useState, type FormEvent } from 'react';
 import { checkCanDelete } from '../../domain/edit';
 import type { FamilyGraph } from '../../domain/graph';
 import { resolveKinship } from '../../domain/kinship';
+import { readRelations } from '../../domain/relations';
 import type { Member, Note } from '../../domain/types';
 import { formatVnDate, lifespan } from '../../lib/text';
 import { Avatar } from '../ui/Avatar';
+
+export type RelationAction =
+  | { kind: 'pick-father'; memberId: string }
+  | { kind: 'pick-mother'; memberId: string }
+  | { kind: 'pick-spouse'; memberId: string }
+  | { kind: 'clear-father'; memberId: string }
+  | { kind: 'clear-mother'; memberId: string }
+  | { kind: 'clear-spouse'; memberId: string; marriageId: string };
 
 interface Props {
   member: Member;
@@ -18,6 +27,7 @@ interface Props {
   onDeleteNote: (noteId: string) => Promise<void>;
   onAddRelative: (memberId: string) => void;
   onEdit: (memberId: string) => void;
+  onEditRelation: (action: RelationAction) => void;
   onDelete: (memberId: string) => void;
   onClose: () => void;
 }
@@ -34,11 +44,15 @@ export function PersonDetail({
   onDeleteNote,
   onAddRelative,
   onEdit,
+  onEditRelation,
   onDelete,
   onClose,
 }: Props) {
   const isMe = member.id === myMemberId;
   const kin = resolveKinship(graph, myMemberId, member.id);
+  const rel = readRelations(graph, member.id);
+  // Giu rieng ra de TypeScript khong mat thu hep kieu ben trong ham mui ten.
+  const spouseLink = rel.spouse;
   const deleteCheck = checkCanDelete(graph, member.id, notes.length);
 
   return (
@@ -98,6 +112,59 @@ export function PersonDetail({
             <Fact label="Công việc hiện tại" value={member.occupation} />
           </dl>
         </section>
+
+        {canEdit && (
+          <section className="detail__section">
+            <h3 className="detail__section-title">Quan hệ trực tiếp</h3>
+            <div className="relations">
+              <RelationRow
+                label="Bố"
+                person={rel.father}
+                onChoose={() => onEditRelation({ kind: 'pick-father', memberId: member.id })}
+                onClear={
+                  rel.father
+                    ? () => onEditRelation({ kind: 'clear-father', memberId: member.id })
+                    : undefined
+                }
+                onOpen={onSelect}
+              />
+              <RelationRow
+                label="Mẹ"
+                person={rel.mother}
+                onChoose={() => onEditRelation({ kind: 'pick-mother', memberId: member.id })}
+                onClear={
+                  rel.mother
+                    ? () => onEditRelation({ kind: 'clear-mother', memberId: member.id })
+                    : undefined
+                }
+                onOpen={onSelect}
+              />
+              <RelationRow
+                label="Vợ / chồng"
+                person={spouseLink?.member}
+                onChoose={() => onEditRelation({ kind: 'pick-spouse', memberId: member.id })}
+                onClear={
+                  spouseLink
+                    ? () =>
+                        onEditRelation({
+                          kind: 'clear-spouse',
+                          memberId: member.id,
+                          marriageId: spouseLink.marriageId,
+                        })
+                    : undefined
+                }
+                onOpen={onSelect}
+              />
+            </div>
+            {rel.children.length > 0 && (
+              <p className="relations__children">
+                <strong>Con ({rel.children.length}):</strong>{' '}
+                {rel.children.map((c) => c.fullName).join(', ')}. Sửa cha mẹ của từng người ngay
+                trong thẻ của họ.
+              </p>
+            )}
+          </section>
+        )}
 
         {!isMe && kin.path.length > 1 && (
           <section className="detail__section">
@@ -177,6 +244,43 @@ export function PersonDetail({
         </footer>
       )}
     </aside>
+  );
+}
+
+function RelationRow({
+  label,
+  person,
+  onChoose,
+  onClear,
+  onOpen,
+}: {
+  label: string;
+  person?: Member;
+  onChoose: () => void;
+  onClear?: () => void;
+  onOpen: (id: string) => void;
+}) {
+  return (
+    <div className="relation-row">
+      <span className="relation-row__label">{label}</span>
+      {person ? (
+        <button className="relation-row__name" type="button" onClick={() => onOpen(person.id)}>
+          {person.fullName}
+        </button>
+      ) : (
+        <span className="relation-row__name relation-row__name--empty">chưa có</span>
+      )}
+      <span className="relation-row__actions">
+        <button className="relation-row__btn" type="button" onClick={onChoose}>
+          {person ? 'Đổi' : 'Chọn'}
+        </button>
+        {onClear && (
+          <button className="relation-row__btn relation-row__btn--danger" type="button" onClick={onClear}>
+            Gỡ
+          </button>
+        )}
+      </span>
+    </div>
   );
 }
 
